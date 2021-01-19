@@ -2,14 +2,17 @@ package email
 
 import (
 	"errors"
+	"fmt"
+	"net/mail"
 	"net/textproto"
+	"strings"
 )
 
 const (
-	HeaderKeyFrom    = "from"
-	HeaderKeyTo      = "to"
-	HeaderKeySubject = "subject"
-	HeaderKeyContent = "content"
+	HeaderKeySender    = "From"
+	HeaderKeyRecipient = "To"
+	HeaderKeySubject   = "Subject"
+	HeaderKeyContent   = "Content"
 )
 
 var (
@@ -19,45 +22,78 @@ var (
 )
 
 type Message struct {
-	sender string
-	header *textproto.MIMEHeader
+	header textproto.MIMEHeader
 }
 
-func New(sender string) *Message {
+func NewMessage() *Message {
 	return &Message{
-		sender: sender,
-		header: new(textproto.MIMEHeader),
+		header: make(textproto.MIMEHeader),
 	}
 }
 
-func (m *Message) AddRecipient(recipient string) error {
-	if !(len(recipient) > 0) {
-		return ErrNoRecipient
+func (m *Message) AddSender(name, address string) {
+	a := mail.Address{
+		Name:    name,
+		Address: address,
 	}
-
-	m.header.Add(HeaderKeyTo, recipient)
-
-	return nil
+	m.header.Add(HeaderKeySender, a.String())
 }
 
-func (m *Message) AddSubject(subject string) error {
-	s := m.header.Get(HeaderKeySubject)
-	if len(s) > 0 {
-		return ErrSubjectExist
-	}
+func (m *Message) AddRecipient(recipient string) {
+	m.header.Add(HeaderKeyRecipient, recipient)
+}
 
+func (m *Message) AddSubject(subject string) {
 	m.header.Add(HeaderKeySubject, subject)
-
-	return nil
 }
 
-func (m *Message) AddContent(content string) error {
-	c := m.header.Get(HeaderKeyContent)
-	if len(c) > 0 {
-		return ErrContentExist
-	}
-
+func (m *Message) AddContent(content string) {
 	m.header.Add(HeaderKeyContent, content)
+}
 
-	return nil
+func (m *Message) Values(headerType string) []string {
+	s := m.header.Values(headerType)
+	return s
+}
+
+func (m *Message) create(key string, writer *textproto.Writer) {
+	s := m.header.Values(key)
+
+	for k, v := range s {
+		writer.PrintfLine("%s: %s", k, v)
+	}
+}
+
+func (m *Message) setHeaderValue(header, value string) string {
+	return fmt.Sprintf("%s: %s\r\n", header, value)
+}
+
+func (m *Message) Recipients() string {
+	r := m.Values(HeaderKeyRecipient)
+	return m.setHeaderValue(HeaderKeyRecipient, strings.Join(r, ","))
+}
+
+func (m *Message) Sender() string {
+	s := m.Values(HeaderKeySender)
+	if !(len(s) > 0) {
+		return ""
+	}
+	return m.setHeaderValue(HeaderKeySender, s[0])
+}
+
+func (m *Message) Subject() string {
+	s := m.Values(HeaderKeySubject)
+	if !(len(s) > 0) {
+		return ""
+	}
+	return m.setHeaderValue(HeaderKeySubject, s[0])
+}
+
+func (m *Message) Content() string {
+	c := m.Values(HeaderKeyContent)
+	return fmt.Sprintf("\r\n%s", strings.Join(c, " "))
+}
+
+func (m *Message) String() string {
+	return fmt.Sprintf("%s%s%s%s", m.Sender(), m.Recipients(), m.Subject(), m.Content())
 }
