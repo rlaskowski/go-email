@@ -1,6 +1,8 @@
 package email
 
 import (
+	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"net/mail"
@@ -22,12 +24,14 @@ var (
 )
 
 type Message struct {
-	header textproto.MIMEHeader
+	header      textproto.MIMEHeader
+	bufioWriter *bufio.Writer
 }
 
 func NewMessage() *Message {
 	return &Message{
-		header: make(textproto.MIMEHeader),
+		header:      make(textproto.MIMEHeader),
+		bufioWriter: bufio.NewWriter(&bytes.Buffer{}),
 	}
 }
 
@@ -95,5 +99,11 @@ func (m *Message) Content() string {
 }
 
 func (m *Message) String() string {
-	return fmt.Sprintf("%s%s%s%s", m.Sender(), m.Recipients(), m.Subject(), m.Content())
+	return fmt.Sprintf("Content-Type: text/html; charset=''\r\n%s%s%s%s", m.Sender(), m.Recipients(), m.Subject(), m.Content())
+}
+
+func (m *Message) Write() {
+	writer := textproto.NewWriter(m.bufioWriter)
+
+	writer.PrintfLine("Content-Type: text/html; charset='UTF-8'")
 }
