@@ -32,7 +32,7 @@ func (e *Email) Send(message *Message) error {
 		return err
 	}
 
-	err = smtp.SendMail(fmt.Sprintf("%s:%d", e.config.Hostname, e.config.Port), auth, sender.Address, message.Values(HeaderKeyRecipient), []byte(message.String()))
+	err = smtp.SendMail(fmt.Sprintf("%s:%d", e.config.Hostname, e.config.Port), auth, sender.Address, message.Values(HeaderKeyRecipient), message.Bytes())
 	if err != nil {
 		return err
 	}

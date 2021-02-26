@@ -24,14 +24,13 @@ var (
 )
 
 type Message struct {
-	header      textproto.MIMEHeader
-	bufioWriter *bufio.Writer
+	header textproto.MIMEHeader
+	buffer bytes.Buffer
 }
 
 func NewMessage() *Message {
 	return &Message{
-		header:      make(textproto.MIMEHeader),
-		bufioWriter: bufio.NewWriter(&bytes.Buffer{}),
+		header: make(textproto.MIMEHeader),
 	}
 }
 
@@ -74,7 +73,7 @@ func (m *Message) setHeaderValue(header, value string) string {
 
 func (m *Message) Recipients() string {
 	r := m.Values(HeaderKeyRecipient)
-	return m.setHeaderValue(HeaderKeyRecipient, strings.Join(r, ","))
+	return strings.Join(r, ",")
 }
 
 func (m *Message) Sender() string {
@@ -82,7 +81,7 @@ func (m *Message) Sender() string {
 	if !(len(s) > 0) {
 		return ""
 	}
-	return m.setHeaderValue(HeaderKeySender, s[0])
+	return s[0]
 }
 
 func (m *Message) Subject() string {
@@ -90,20 +89,35 @@ func (m *Message) Subject() string {
 	if !(len(s) > 0) {
 		return ""
 	}
-	return m.setHeaderValue(HeaderKeySubject, s[0])
+	return s[0]
 }
 
 func (m *Message) Content() string {
 	c := m.Values(HeaderKeyContent)
-	return fmt.Sprintf("\r\n%s", strings.Join(c, " "))
+	return strings.Join(c, " ")
 }
 
 func (m *Message) String() string {
-	return fmt.Sprintf("Content-Type: text/html; charset=''\r\n%s%s%s%s", m.Sender(), m.Recipients(), m.Subject(), m.Content())
+	m.write()
+
+	return m.buffer.String()
 }
 
-func (m *Message) Write() {
-	writer := textproto.NewWriter(m.bufioWriter)
+func (m *Message) Bytes() []byte {
+	m.write()
+
+	return m.buffer.Bytes()
+}
+
+func (m *Message) write() *textproto.Writer {
+	bW := bufio.NewWriter(&m.buffer)
+	writer := textproto.NewWriter(bW)
 
 	writer.PrintfLine("Content-Type: text/html; charset='UTF-8'")
+	writer.PrintfLine("From: %s", m.Sender())
+	writer.PrintfLine("To: %s", m.Recipients())
+	writer.PrintfLine("Subject: %s\r\n", m.Subject())
+	writer.PrintfLine("%s", m.Content())
+
+	return writer
 }
