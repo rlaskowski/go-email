@@ -2,9 +2,12 @@ package router
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
+	"mime/multipart"
 	"net/http"
+	"sync"
 
 	"github.com/bmizerany/pat"
 	"github.com/rlaskowski/go-email/config"
@@ -12,11 +15,12 @@ import (
 )
 
 type HttpServer struct {
-	server     *http.Server
-	router     *pat.PatternServeMux
-	context    context.Context
-	cancel     context.CancelFunc
-	registries *registries.Registries
+	server        *http.Server
+	router        *pat.PatternServeMux
+	context       context.Context
+	cancel        context.CancelFunc
+	registries    *registries.Registries
+	multipartPool sync.Pool
 }
 
 type Router struct {
@@ -40,6 +44,10 @@ func NewHttpServer(registries *registries.Registries) *HttpServer {
 		ReadTimeout:  config.HttpServerReadTimeout,
 		WriteTimeout: config.HttpServerWriteTimeout,
 		Handler:      h,
+	}
+
+	h.multipartPool.New = func() interface{} {
+		return new(mutlipartController)
 	}
 
 	return h
@@ -84,7 +92,39 @@ func (h *HttpServer) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HttpServer) Send(rw http.ResponseWriter, r *http.Request) {
+	multipartReader, err := r.MultipartReader()
+	c := r.Context()
 
+	if err != nil {
+		rw.WriteHeader(http.StatusBadRequest)
+	}
+
+	multipartController := h.acquireMultipart(multipartReader)
+
+	file, err := multipartController.File()
+	if err != nil {
+		rw.WriteHeader(http.StatusBadRequest)
+	}
+
+}
+
+func (h *HttpServer) json(rw http.ResponseWriter, i interface{}) {
+	rw.Header().Add("Content-Type", "application/json")
+
+	marshal, err := json.Marshal(i)
+	if err != nil {
+		rw.Write([]byte(err.Error()))
+	}
+	rw.Write(marshal)
+}
+
+func (h *HttpServer) acquireMultipart(reader *multipart.Reader) *mutlipartController {
+	m := h.multipartPool.Get().(*mutlipartController)
+	defer h.multipartPool.Put(m)
+
+	m.mutlipartReader = reader
+
+	return m
 }
 
 /* func (h *HttpServer) BME280(rw http.ResponseWriter, r *http.Request) {
@@ -106,13 +146,5 @@ func (h *HttpServer) DriversByGroup(rw http.ResponseWriter, r *http.Request) {
 	h.json(rw, h.registries.DriverRepository.FindByGroup(group))
 }
 
-func (h *HttpServer) json(rw http.ResponseWriter, i interface{}) {
-	rw.Header().Add("Content-Type", "application/json")
 
-	marshal, err := json.Marshal(i)
-	if err != nil {
-		rw.Write([]byte(err.Error()))
-	}
-	rw.Write(marshal)
-}
 */
