@@ -6,20 +6,24 @@ import (
 	"os/signal"
 
 	"github.com/rlaskowski/go-email/config"
+	"github.com/rlaskowski/go-email/queue"
 	"github.com/rlaskowski/go-email/registries"
 	"github.com/rlaskowski/go-email/router"
 )
 
 type Service struct {
-	http       *router.HttpServer
-	registries *registries.Registries
+	http         *router.HttpServer
+	queueFactory *queue.QueueFactory
+	registries   *registries.Registries
 }
 
 func New() *Service {
-	registries := registries.NewRegistries()
+	queueFactory := queue.NewFactory()
+	registries := registries.NewRegistries(queueFactory)
 
 	return &Service{
-		http: router.NewHttpServer(registries),
+		http:         router.NewHttpServer(registries),
+		queueFactory: queueFactory,
 	}
 }
 
@@ -28,6 +32,10 @@ func (s *Service) Start() error {
 
 	if err := s.http.Start(); err != nil {
 		log.Printf("Could not start HTTP server: %s", err)
+	}
+
+	if err := s.queueFactory.Start(); err != nil {
+		log.Printf("Could not start Queue: %s", err)
 	}
 
 	sigChan := make(chan os.Signal, 1)
@@ -42,6 +50,10 @@ func (s *Service) Start() error {
 func (s *Service) Stop() error {
 	if err := s.http.Stop(); err != nil {
 		log.Printf("Could not stop HTTP server: %s", err)
+	}
+
+	if err := s.queueFactory.Stop(); err != nil {
+		log.Printf("Could not stop Queue: %s", err)
 	}
 
 	return nil

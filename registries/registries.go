@@ -1,13 +1,13 @@
 package registries
 
-import "github.com/rlaskowski/go-email"
+import (
+	"github.com/rlaskowski/go-email/queue"
+)
 
 type Registries struct {
-	Email *email.Email
+	QueueFactory *queue.QueueFactory
 }
 
-func NewRegistries() *Registries {
-	return &Registries{
-		Email: email.NewEmail(),
-	}
+func NewRegistries(QueueFactory *queue.QueueFactory) *Registries {
+	return &Registries{QueueFactory}
 }

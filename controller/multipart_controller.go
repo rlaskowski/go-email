@@ -1,4 +1,4 @@
-package router
+package controller
 
 import (
 	"encoding/json"
@@ -9,15 +9,15 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/RussellLuo/validating"
+	"github.com/RussellLuo/validating/v2"
 	"github.com/rlaskowski/go-email/model"
 )
 
-type mutlipartController struct {
-	mutlipartReader *multipart.Reader
+type MutlipartController struct {
+	MutlipartReader *multipart.Reader
 }
 
-func (m *mutlipartController) Message() (*model.Message, error) {
+func (m *MutlipartController) Message() (*model.Message, error) {
 	messageForm := m.walk("message")
 	var messageModel *model.Message
 
@@ -39,7 +39,7 @@ func (m *mutlipartController) Message() (*model.Message, error) {
 	return messageModel, nil
 }
 
-func (m *mutlipartController) File() (*multipart.Part, error) {
+func (m *MutlipartController) File() (*multipart.Part, error) {
 	fileForm := m.walk("file")
 
 	if fileForm == nil {
@@ -53,9 +53,9 @@ func (m *mutlipartController) File() (*multipart.Part, error) {
 	return fileForm, nil
 }
 
-func (m *mutlipartController) walk(name string) *multipart.Part {
+func (m *MutlipartController) walk(name string) *multipart.Part {
 	for {
-		part, err := m.mutlipartReader.NextRawPart()
+		part, err := m.MutlipartReader.NextRawPart()
 		if err == io.EOF || err != nil {
 			break
 		}
@@ -67,7 +67,7 @@ func (m *mutlipartController) walk(name string) *multipart.Part {
 	return nil
 }
 
-func (m *mutlipartController) unmarshalMessage(data []byte, message *model.Message) error {
+func (m *MutlipartController) unmarshalMessage(data []byte, message *model.Message) error {
 	err := json.Unmarshal(data, message)
 	if err != nil {
 		return err
@@ -86,7 +86,7 @@ func (m *mutlipartController) unmarshalMessage(data []byte, message *model.Messa
 	return nil
 }
 
-func (m *mutlipartController) validateFileForm(fileForm *multipart.Part) error {
+func (m *MutlipartController) validateFileForm(fileForm *multipart.Part) error {
 	if !(len(fileForm.FileName()) > 0) {
 		return fmt.Errorf("File name not found")
 	}

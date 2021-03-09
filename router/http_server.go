@@ -11,6 +11,9 @@ import (
 
 	"github.com/bmizerany/pat"
 	"github.com/rlaskowski/go-email/config"
+	"github.com/rlaskowski/go-email/controller"
+	"github.com/rlaskowski/go-email/model"
+	"github.com/rlaskowski/go-email/queue"
 	"github.com/rlaskowski/go-email/registries"
 )
 
@@ -40,14 +43,15 @@ func NewHttpServer(registries *registries.Registries) *HttpServer {
 	}
 
 	h.server = &http.Server{
-		Addr:         fmt.Sprintf(":%d", config.HttpServerPort),
-		ReadTimeout:  config.HttpServerReadTimeout,
-		WriteTimeout: config.HttpServerWriteTimeout,
-		Handler:      h,
+		Addr:           fmt.Sprintf(":%d", config.HttpServerPort),
+		ReadTimeout:    config.HttpServerReadTimeout,
+		WriteTimeout:   config.HttpServerWriteTimeout,
+		MaxHeaderBytes: config.HttpMaxHeaderSize,
+		Handler:        h,
 	}
 
 	h.multipartPool.New = func() interface{} {
-		return new(mutlipartController)
+		return new(controller.MutlipartController)
 	}
 
 	return h
@@ -76,6 +80,7 @@ func (h *HttpServer) Stop() error {
 }
 
 func (h *HttpServer) configureEndpoints() {
+	h.Post("/send/file", h.SendWithFile)
 	h.Post("/send", h.Send)
 }
 
@@ -91,9 +96,9 @@ func (h *HttpServer) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	h.router.ServeHTTP(rw, r)
 }
 
-func (h *HttpServer) Send(rw http.ResponseWriter, r *http.Request) {
+func (h *HttpServer) SendWithFile(rw http.ResponseWriter, r *http.Request) {
 	multipartReader, err := r.MultipartReader()
-	c := r.Context()
+	//c := r.Context()
 
 	if err != nil {
 		rw.WriteHeader(http.StatusBadRequest)
@@ -103,9 +108,37 @@ func (h *HttpServer) Send(rw http.ResponseWriter, r *http.Request) {
 
 	file, err := multipartController.File()
 	if err != nil {
-		rw.WriteHeader(http.StatusBadRequest)
+		h.json(rw, map[string]string{
+			"error_message": err.Error(),
+		})
 	}
 
+	h.json(rw, map[string]string{
+		"file_name": file.FileName(),
+		"form_name": file.FormName(),
+	})
+
+}
+
+func (h *HttpServer) Send(rw http.ResponseWriter, r *http.Request) {
+	messageForm := r.FormValue("message")
+
+	message := new(model.Message)
+
+	if err := json.Unmarshal([]byte(messageForm), message); err != nil {
+		rw.WriteHeader(http.StatusBadRequest)
+		rw.Write([]byte(err.Error()))
+	}
+
+	queue, err := h.registries.QueueFactory.GetOrCreate(queue.EmailQueueType)
+	if err != nil {
+		rw.WriteHeader(http.StatusBadRequest)
+		rw.Write([]byte(err.Error()))
+	}
+
+	queue.Publish(message)
+
+	rw.Write([]byte(messageForm))
 }
 
 func (h *HttpServer) json(rw http.ResponseWriter, i interface{}) {
@@ -118,11 +151,11 @@ func (h *HttpServer) json(rw http.ResponseWriter, i interface{}) {
 	rw.Write(marshal)
 }
 
-func (h *HttpServer) acquireMultipart(reader *multipart.Reader) *mutlipartController {
-	m := h.multipartPool.Get().(*mutlipartController)
+func (h *HttpServer) acquireMultipart(reader *multipart.Reader) *controller.MutlipartController {
+	m := h.multipartPool.Get().(*controller.MutlipartController)
 	defer h.multipartPool.Put(m)
 
-	m.mutlipartReader = reader
+	m.MutlipartReader = reader
 
 	return m
 }
