@@ -22,17 +22,22 @@ func NewEmail() *Email {
 }
 
 //Sending email
-func (e *Email) Send(key string, message *model.Message) error {
-	c, err := e.loadConfig(key)
+func (e *Email) Send(message *model.Message, file string) error {
+	c, err := e.loadConfig(message.Key)
 	if err != nil {
 		return fmt.Errorf("Could not load email config file due to: %s", err)
 	}
 
 	m := NewMessage()
-	m.AddSender("", message.Sender)
+
+	m.AddSender(message.Sender, c.Email)
 	m.AddRecipient(message.Recipient)
 	m.AddSubject(message.Subject)
 	m.AddContent(message.Content)
+
+	if len(file) > 0 {
+		m.AttachFile(file)
+	}
 
 	return e.send(c, m)
 }
@@ -45,7 +50,7 @@ func (e *Email) send(config *Config, message *Message) error {
 		return err
 	}
 
-	err = smtp.SendMail(fmt.Sprintf("%s:%s", config.Hostname, config.Port), auth, sender.Address, message.Values(HeaderKeyRecipient), message.Bytes())
+	err = smtp.SendMail(fmt.Sprintf("%s:%d", config.Hostname, config.Port), auth, sender.Address, message.Values(HeaderKeyRecipient), message.Bytes())
 	if err != nil {
 		return err
 	}

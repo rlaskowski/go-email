@@ -4,7 +4,8 @@ type Config struct {
 	Key         string `yaml:"key"`
 	Description string `yaml:"description"`
 	Hostname    string `yaml:"hostname"`
-	Port        string `yaml:"port"`
+	Port        int    `yaml:"port"`
+	Email       string `yaml:"email"`
 	Username    string `yaml:"username"`
 	Password    string `yaml:"password"`
 }

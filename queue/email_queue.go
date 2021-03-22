@@ -1,8 +1,9 @@
 package queue
 
 import (
+	"bytes"
 	"errors"
-	"log"
+	"reflect"
 	"sync"
 	"time"
 
@@ -11,14 +12,22 @@ import (
 )
 
 type EmailQueue struct {
-	mutex *sync.Mutex
-	queue []interface{}
+	mutex     *sync.Mutex
+	queue     []interface{}
+	emailPool sync.Pool
+	buff      bytes.Buffer
 }
 
 func NewEmailQueue() *EmailQueue {
-	return &EmailQueue{
+	e := &EmailQueue{
 		mutex: &sync.Mutex{},
 	}
+
+	e.emailPool.New = func() interface{} {
+		return email.NewEmail()
+	}
+
+	return e
 }
 
 func (e *EmailQueue) Start() error {
@@ -30,24 +39,71 @@ func (e *EmailQueue) Stop() error {
 	return nil
 }
 
-func (e *EmailQueue) Publish(message interface{}) error {
+func (e *EmailQueue) Publish(message ...interface{}) error {
+	e.mutex.Lock()
+	defer e.mutex.Unlock()
+
 	e.queue = append(e.queue, message)
+
 	return nil
 }
 
 func (e *EmailQueue) Subscribe() error {
+	return nil
+}
+
+func (e *EmailQueue) send() error {
+	var message *model.Message
+	var file string
+
 	firstElement, err := e.firstElement()
 	if err != nil {
 		return err
 	}
 
-	message := firstElement.(*model.Message)
+	v := reflect.ValueOf(firstElement)
 
-	email := email.NewEmail()
+	if v.Kind() == reflect.Slice {
+		for _, m := range firstElement.([]interface{}) {
+			switch v := reflect.ValueOf(m); v.Kind() {
+			case reflect.String:
+				file = m.(string)
+			default:
+				message = m.(*model.Message)
+			}
+		}
+	}
 
-	go email.Send(message.Key, message)
+	select {
+	case ret := <-e.sendEmail(message, file):
+		if !ret {
+
+			if err := e.Publish(firstElement); err != nil {
+				return errors.New(err.Error())
+			}
+			return errors.New("Error when try to send email")
+
+		}
+	}
 
 	return nil
+}
+
+func (e *EmailQueue) sendEmail(message *model.Message, file string) <-chan bool {
+	rCh := make(chan bool, 100)
+
+	go func() {
+		email := e.acquireEmail()
+		err := email.Send(message, file)
+
+		if err == nil {
+			rCh <- true
+		}
+
+		close(rCh)
+	}()
+
+	return rCh
 }
 
 func (e *EmailQueue) isEmpty() bool {
@@ -85,13 +141,47 @@ func (e *EmailQueue) firstElement() (interface{}, error) {
 	return element, nil
 }
 
+func (e *EmailQueue) acquireEmail() *email.Email {
+	email := e.emailPool.Get().(*email.Email)
+	defer e.emailPool.Put(email)
+
+	return email
+}
+
+/* func (e *EmailQueue) WriteToTable() string {
+	writer := new(tabwriter.Writer)
+
+	e.buff.Reset()
+
+	sink := bufio.NewWriter(&e.buff)
+	writer.Init(sink, 0, 8, 2, ' ', tabwriter.Debug)
+
+	_, _ = fmt.Fprintln(writer, "Host \t Pathname ")
+
+	_ = d.IterateAll(func(database Database) error {
+		_, _ = fmt.Fprintf(writer, "%s \t %s \n", database.databaseConnection.Host(), database.databaseConnection.Path())
+		return nil
+	})
+
+	_, _ = fmt.Fprintln(writer)
+
+	if err := writer.Flush(); err != nil {
+		return err.Error()
+	}
+
+	if err := sink.Flush(); err != nil {
+		return err.Error()
+	}
+
+	return e.buff.String()
+} */
+
 func (e *EmailQueue) scan() {
 	for {
 
-		if err := e.Subscribe(); err != nil {
-			log.Printf("Could not get element from queue: %s", err)
+		if err := e.send(); err != nil {
+			time.Sleep(time.Second * 3)
 		}
 
-		time.Sleep(time.Second * 3)
 	}
 }

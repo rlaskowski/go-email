@@ -11,10 +11,11 @@ import (
 )
 
 const (
-	HeaderKeySender    = "From"
-	HeaderKeyRecipient = "To"
-	HeaderKeySubject   = "Subject"
-	HeaderKeyContent   = "Content"
+	HeaderKeySender       = "From"
+	HeaderKeyRecipient    = "To"
+	HeaderKeySubject      = "Subject"
+	HeaderKeyContent      = "Content"
+	HeaderKeyAttachedFile = "AttachedFile"
 )
 
 var (
@@ -52,6 +53,10 @@ func (m *Message) AddSubject(subject string) {
 
 func (m *Message) AddContent(content string) {
 	m.header.Add(HeaderKeyContent, content)
+}
+
+func (m *Message) AttachFile(file string) {
+	m.header.Add(HeaderKeyAttachedFile, file)
 }
 
 func (m *Message) Values(headerType string) []string {
@@ -97,6 +102,11 @@ func (m *Message) Content() string {
 	return strings.Join(c, " ")
 }
 
+func (m *Message) AttachedFile() string {
+	f := m.Values(HeaderKeyAttachedFile)
+	return f[0]
+}
+
 func (m *Message) String() string {
 	m.write()
 
@@ -113,11 +123,16 @@ func (m *Message) write() *textproto.Writer {
 	bW := bufio.NewWriter(&m.buffer)
 	writer := textproto.NewWriter(bW)
 
-	writer.PrintfLine("Content-Type: text/html; charset='UTF-8'")
+	//writer.PrintfLine("Content-Type: text/html; charset='UTF-8'")
 	writer.PrintfLine("From: %s", m.Sender())
 	writer.PrintfLine("To: %s", m.Recipients())
-	writer.PrintfLine("Subject: %s\r\n", m.Subject())
-	writer.PrintfLine("%s", m.Content())
+	writer.PrintfLine("Subject: %s", m.Subject())
+	//writer.PrintfLine("Content-Type: multipart/mixed;boundary='_004_AM0PR10MB2995A1A1018AC08FE18533ECFAA30AM0PR10MB2995EURP_'")
+	writer.PrintfLine("Content-Type: text/html; charset='UTF-8'\r\n")
+	writer.PrintfLine("%s\r\n", m.Content())
+	//writer.PrintfLine("Content-Type: application/pdf")
+	//writer.PrintfLine("Content-Disposition: attachment; filename='test.pdf'")
+	//writer.PrintfLine("Content-Transfer-Encoding: base64")
 
 	return writer
 }

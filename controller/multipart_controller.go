@@ -14,63 +14,69 @@ import (
 )
 
 type MutlipartController struct {
-	MutlipartReader *multipart.Reader
+	Reader *multipart.Reader
 }
 
 func (m *MutlipartController) Message() (*model.Message, error) {
-	messageForm := m.walk("message")
-	var messageModel *model.Message
-
-	if messageForm == nil {
-		return nil, fmt.Errorf("No message parameter")
-	}
-
-	messageModel = new(model.Message)
-	message, err := ioutil.ReadAll(messageForm)
+	messageForm, err := m.walk("message")
 
 	if err != nil {
 		return nil, err
 	}
-	err = m.unmarshalMessage([]byte(message), messageModel)
+
+	b, err := ioutil.ReadAll(messageForm)
 
 	if err != nil {
 		return nil, err
 	}
-	return messageModel, nil
+	message, err := m.unmarshalMessage(b)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return message, nil
 }
 
 func (m *MutlipartController) File() (*multipart.Part, error) {
-	fileForm := m.walk("file")
+	fileForm, err := m.walk("file")
 
-	if fileForm == nil {
-		return nil, fmt.Errorf("No file parameter")
-	}
-
-	err := m.validateFileForm(fileForm)
 	if err != nil {
 		return nil, err
 	}
+
+	err = m.validateFileForm(fileForm)
+	if err != nil {
+		return nil, err
+	}
+
 	return fileForm, nil
 }
 
-func (m *MutlipartController) walk(name string) *multipart.Part {
+func (m *MutlipartController) walk(name string) (*multipart.Part, error) {
 	for {
-		part, err := m.MutlipartReader.NextRawPart()
-		if err == io.EOF || err != nil {
+		part, err := m.Reader.NextRawPart()
+		if err != nil {
+			if err != io.EOF {
+				return nil, err
+			}
 			break
 		}
 
-		if strings.Contains(part.FormName(), name) {
-			return part
+		if strings.Contains(name, part.FormName()) {
+			return part, nil
 		}
 	}
-	return nil
+
+	return nil, fmt.Errorf("Could not find %s form data", name)
 }
 
-func (m *MutlipartController) unmarshalMessage(data []byte, message *model.Message) error {
+func (m *MutlipartController) unmarshalMessage(data []byte) (*model.Message, error) {
+	message := new(model.Message)
+
 	err := json.Unmarshal(data, message)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	validateErr := validating.Validate(validating.Schema{
@@ -81,9 +87,9 @@ func (m *MutlipartController) unmarshalMessage(data []byte, message *model.Messa
 	})
 
 	if validateErr != nil {
-		return validateErr
+		return nil, validateErr
 	}
-	return nil
+	return message, nil
 }
 
 func (m *MutlipartController) validateFileForm(fileForm *multipart.Part) error {

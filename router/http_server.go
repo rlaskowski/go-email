@@ -15,6 +15,7 @@ import (
 	"github.com/rlaskowski/go-email/model"
 	"github.com/rlaskowski/go-email/queue"
 	"github.com/rlaskowski/go-email/registries"
+	"github.com/rlaskowski/go-email/store"
 )
 
 type HttpServer struct {
@@ -97,35 +98,27 @@ func (h *HttpServer) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HttpServer) SendWithFile(rw http.ResponseWriter, r *http.Request) {
-	multipartReader, err := r.MultipartReader()
-	//c := r.Context()
+	var result error
 
+	multipartReader, err := r.MultipartReader()
 	if err != nil {
 		rw.WriteHeader(http.StatusBadRequest)
+		rw.Write([]byte(err.Error()))
+		return
 	}
+	//c := r.Context()
 
 	multipartController := h.acquireMultipart(multipartReader)
 
-	file, err := multipartController.File()
+	message, err := multipartController.Message()
 	if err != nil {
-		h.json(rw, map[string]string{
-			"error_message": err.Error(),
-		})
+		rw.WriteHeader(http.StatusBadRequest)
+		rw.Write([]byte(err.Error()))
+		return
 	}
 
-	h.json(rw, map[string]string{
-		"file_name": file.FileName(),
-		"form_name": file.FormName(),
-	})
-
-}
-
-func (h *HttpServer) Send(rw http.ResponseWriter, r *http.Request) {
-	messageForm := r.FormValue("message")
-
-	message := new(model.Message)
-
-	if err := json.Unmarshal([]byte(messageForm), message); err != nil {
+	file, err := h.storeFile(multipartController)
+	if err != nil {
 		rw.WriteHeader(http.StatusBadRequest)
 		rw.Write([]byte(err.Error()))
 	}
@@ -134,11 +127,77 @@ func (h *HttpServer) Send(rw http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		rw.WriteHeader(http.StatusBadRequest)
 		rw.Write([]byte(err.Error()))
+		return
 	}
 
-	queue.Publish(message)
+	if err := queue.Publish(message, file); err != nil {
+		rw.WriteHeader(http.StatusBadRequest)
+		rw.Write([]byte(err.Error()))
+		return
+	}
 
-	rw.Write([]byte(messageForm))
+	if result != nil {
+		rw.WriteHeader(http.StatusBadRequest)
+		rw.Write([]byte(err.Error()))
+	} else {
+		h.json(rw, map[string]string{
+			"result": "Message published successfully",
+		})
+		rw.WriteHeader(http.StatusOK)
+	}
+
+}
+
+func (h *HttpServer) Send(rw http.ResponseWriter, r *http.Request) {
+	var result error
+
+	messageForm := r.FormValue("message")
+
+	message := new(model.Message)
+
+	if err := json.Unmarshal([]byte(messageForm), message); err != nil {
+		result = h.multiFailure(err.Error())
+	}
+
+	queue, err := h.registries.QueueFactory.GetOrCreate(queue.EmailQueueType)
+	if err != nil {
+		result = h.multiFailure(err.Error())
+	}
+
+	if err := queue.Publish(message); err != nil {
+		result = h.multiFailure(err.Error())
+	}
+
+	if result != nil {
+		rw.WriteHeader(http.StatusBadRequest)
+		rw.Write([]byte(err.Error()))
+	} else {
+		h.json(rw, map[string]string{
+			"result": "Message published successfully",
+		})
+		rw.WriteHeader(http.StatusOK)
+	}
+
+}
+
+func (h *HttpServer) storeFile(multipartController *controller.MutlipartController) (string, error) {
+	file, err := multipartController.File()
+	if err != nil {
+		return "", err
+	}
+
+	fileStore := store.NewFileStore(config.FileStorePath)
+
+	fileuuid, err := fileStore.Store(file)
+	if err != nil {
+		return "", err
+	}
+
+	return fileuuid, nil
+}
+
+func (h *HttpServer) multiFailure(err string) error {
+	return fmt.Errorf("%s\r\n", err)
 }
 
 func (h *HttpServer) json(rw http.ResponseWriter, i interface{}) {
@@ -155,7 +214,7 @@ func (h *HttpServer) acquireMultipart(reader *multipart.Reader) *controller.Mutl
 	m := h.multipartPool.Get().(*controller.MutlipartController)
 	defer h.multipartPool.Put(m)
 
-	m.MutlipartReader = reader
+	m.Reader = reader
 
 	return m
 }
