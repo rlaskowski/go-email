@@ -78,14 +78,11 @@ func (e *EmailQueue) send() error {
 	case ret := <-e.sendEmail(message, file):
 		if !ret {
 
-			if err := e.Publish(firstElement); err != nil {
+			if err := e.Publish(message, file); err != nil {
 				return errors.New(err.Error())
 			}
-			return errors.New("Error when try to send email")
-
 		}
 	}
-
 	return nil
 }
 

@@ -115,7 +115,7 @@ func (f *FileStore) FindByPath(path string) (*model.File, error) {
 func (f *FileStore) Store(reader io.Reader) (string, error) {
 	id := f.fileId()
 	path := filepath.Join(f.ControllDir(id), id)
-	fmt.Println(f.ControllDir(id))
+
 	if !f.Exists(f.ControllDir(id)) {
 		err := os.Mkdir(f.ControllDir(id), config.FilePermissions)
 

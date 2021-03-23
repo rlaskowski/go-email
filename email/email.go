@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/mail"
 	"net/smtp"
 	"os"
@@ -42,8 +43,24 @@ func (e *Email) Send(message *model.Message, file string) error {
 	return e.send(c, m)
 }
 
+/* func (e *Email) attachFile(message *Message, file string) error {
+
+} */
+
+func (e *Email) AuthLoginAuth(config *Config) smtp.Auth {
+	return AuthLoginAuth(config.Username, config.Password)
+}
+
+func (e *Email) PlainAuth(config *Config) smtp.Auth {
+	return smtp.PlainAuth("", config.Username, config.Password, config.Hostname)
+}
+
+func (e *Email) CRAMMD5Auth(config *Config) smtp.Auth {
+	return smtp.CRAMMD5Auth(config.Username, config.Password)
+}
+
 func (e *Email) send(config *Config, message *Message) error {
-	auth := smtp.PlainAuth("", config.Username, config.Password, config.Hostname)
+	auth := e.AuthLoginAuth(config)
 
 	sender, err := mail.ParseAddress(message.Values(HeaderKeySender)[0])
 	if err != nil {
@@ -52,8 +69,12 @@ func (e *Email) send(config *Config, message *Message) error {
 
 	err = smtp.SendMail(fmt.Sprintf("%s:%d", config.Hostname, config.Port), auth, sender.Address, message.Values(HeaderKeyRecipient), message.Bytes())
 	if err != nil {
+		log.Printf("Error when try to send email due to: %s, client key %s", err, config.Key)
 		return err
 	}
+
+	log.Printf("Email was sended successful to %s, client key %s", message.Recipients(), config.Key)
+
 	return nil
 }
 
