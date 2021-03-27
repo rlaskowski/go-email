@@ -3,19 +3,25 @@ package email
 import (
 	"bufio"
 	"bytes"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
+	"mime"
 	"net/mail"
 	"net/textproto"
+	"path/filepath"
 	"strings"
+
+	"github.com/rlaskowski/go-email/model"
 )
 
 const (
-	HeaderKeySender       = "From"
-	HeaderKeyRecipient    = "To"
-	HeaderKeySubject      = "Subject"
-	HeaderKeyContent      = "Content"
-	HeaderKeyAttachedFile = "AttachedFile"
+	HeaderKeySender    = "From"
+	HeaderKeyRecipient = "To"
+	HeaderKeySubject   = "Subject"
+	HeaderKeyContent   = "Content"
 )
 
 var (
@@ -26,6 +32,7 @@ var (
 
 type Message struct {
 	header textproto.MIMEHeader
+	files  []*model.File
 	buffer bytes.Buffer
 }
 
@@ -55,8 +62,8 @@ func (m *Message) AddContent(content string) {
 	m.header.Add(HeaderKeyContent, content)
 }
 
-func (m *Message) AttachFile(file string) {
-	m.header.Add(HeaderKeyAttachedFile, file)
+func (m *Message) AttachFile(file *model.File) {
+	m.files = append(m.files, file)
 }
 
 func (m *Message) Values(headerType string) []string {
@@ -102,20 +109,27 @@ func (m *Message) Content() string {
 	return strings.Join(c, " ")
 }
 
-func (m *Message) AttachedFile() string {
-	f := m.Values(HeaderKeyAttachedFile)
-	return f[0]
+func (m *Message) encodeString(name string) string {
+	encode := base64.StdEncoding.EncodeToString([]byte(name))
+	return encode
+}
+
+func (m *Message) boundary() string {
+	var buf [30]byte
+	_, err := io.ReadFull(rand.Reader, buf[:])
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%x", buf[:])
 }
 
 func (m *Message) String() string {
 	m.write()
-
 	return m.buffer.String()
 }
 
 func (m *Message) Bytes() []byte {
 	m.write()
-
 	return m.buffer.Bytes()
 }
 
@@ -123,16 +137,44 @@ func (m *Message) write() *textproto.Writer {
 	bW := bufio.NewWriter(&m.buffer)
 	writer := textproto.NewWriter(bW)
 
-	//writer.PrintfLine("Content-Type: text/html; charset='UTF-8'")
+	boundary := fmt.Sprintf("%s", m.boundary())
+
 	writer.PrintfLine("From: %s", m.Sender())
 	writer.PrintfLine("To: %s", m.Recipients())
 	writer.PrintfLine("Subject: %s", m.Subject())
-	//writer.PrintfLine("Content-Type: multipart/mixed;boundary='_004_AM0PR10MB2995A1A1018AC08FE18533ECFAA30AM0PR10MB2995EURP_'")
-	writer.PrintfLine("Content-Type: text/html; charset='UTF-8'\r\n")
-	writer.PrintfLine("%s\r\n", m.Content())
-	//writer.PrintfLine("Content-Type: application/pdf")
-	//writer.PrintfLine("Content-Disposition: attachment; filename='test.pdf'")
-	//writer.PrintfLine("Content-Transfer-Encoding: base64")
+	writer.PrintfLine("MIME-Version: 1.0")
+
+	if len(m.files) > 0 {
+		writer.PrintfLine("Content-Type: multipart/mixed; boundary=%s\r\n", boundary)
+		writer.PrintfLine("--%s", boundary)
+	}
+
+	writer.PrintfLine("Content-Type: text/plain; charset=utf-8\r\n")
+	writer.PrintfLine("%s", m.Content())
+
+	if len(m.files) > 0 {
+		for i, file := range m.files {
+			writer.PrintfLine("\r\n\r\n--%s", boundary)
+
+			ext := filepath.Ext(file.Name)
+			mimetype := mime.TypeByExtension(ext)
+
+			writer.PrintfLine("Content-Type: %s", mimetype)
+			writer.PrintfLine("Content-Transfer-Encoding: base64")
+			writer.PrintfLine("Content-Disposition: attachment; filename==?UTF-8?B?%s?=\r\n", m.encodeString(file.Name))
+
+			writer.PrintfLine("%s", m.encodeString(string(file.Data)))
+
+			writer.PrintfLine("\r\n--%s", boundary)
+
+			if i == len(m.files) {
+				writer.PrintfLine("\r\n--%s--", boundary)
+			} else {
+				writer.PrintfLine("\r\n--%s", boundary)
+			}
+		}
+
+	}
 
 	return writer
 }

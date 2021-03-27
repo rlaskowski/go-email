@@ -23,7 +23,7 @@ func NewEmail() *Email {
 }
 
 //Sending email
-func (e *Email) Send(message *model.Message, file string) error {
+func (e *Email) Send(message *model.Message, file *model.File) error {
 	c, err := e.loadConfig(message.Key)
 	if err != nil {
 		return fmt.Errorf("Could not load email config file due to: %s", err)
@@ -36,16 +36,10 @@ func (e *Email) Send(message *model.Message, file string) error {
 	m.AddSubject(message.Subject)
 	m.AddContent(message.Content)
 
-	if len(file) > 0 {
-		m.AttachFile(file)
-	}
+	m.AttachFile(file)
 
 	return e.send(c, m)
 }
-
-/* func (e *Email) attachFile(message *Message, file string) error {
-
-} */
 
 func (e *Email) AuthLoginAuth(config *Config) smtp.Auth {
 	return AuthLoginAuth(config.Username, config.Password)

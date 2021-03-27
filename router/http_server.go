@@ -15,7 +15,6 @@ import (
 	"github.com/rlaskowski/go-email/model"
 	"github.com/rlaskowski/go-email/queue"
 	"github.com/rlaskowski/go-email/registries"
-	"github.com/rlaskowski/go-email/store"
 )
 
 type HttpServer struct {
@@ -117,7 +116,7 @@ func (h *HttpServer) SendWithFile(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	file, err := h.storeFile(multipartController)
+	file, err := multipartController.File()
 	if err != nil {
 		rw.WriteHeader(http.StatusBadRequest)
 		rw.Write([]byte(err.Error()))
@@ -180,7 +179,7 @@ func (h *HttpServer) Send(rw http.ResponseWriter, r *http.Request) {
 
 }
 
-func (h *HttpServer) storeFile(multipartController *controller.MutlipartController) (string, error) {
+/* func (h *HttpServer) storeFile(multipartController *controller.MutlipartController) (string, error) {
 	file, err := multipartController.File()
 	if err != nil {
 		return "", err
@@ -194,7 +193,7 @@ func (h *HttpServer) storeFile(multipartController *controller.MutlipartControll
 	}
 
 	return fileuuid, nil
-}
+} */
 
 func (h *HttpServer) multiFailure(err string) error {
 	return fmt.Errorf("%s\r\n", err)

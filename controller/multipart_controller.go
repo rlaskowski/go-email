@@ -38,7 +38,7 @@ func (m *MutlipartController) Message() (*model.Message, error) {
 	return message, nil
 }
 
-func (m *MutlipartController) File() (*multipart.Part, error) {
+func (m *MutlipartController) File() (*model.File, error) {
 	fileForm, err := m.walk("file")
 
 	if err != nil {
@@ -50,7 +50,11 @@ func (m *MutlipartController) File() (*multipart.Part, error) {
 		return nil, err
 	}
 
-	return fileForm, nil
+	file := model.NewFile(fileForm.FileName())
+
+	file.Reader = fileForm
+
+	return file, nil
 }
 
 func (m *MutlipartController) walk(name string) (*multipart.Part, error) {

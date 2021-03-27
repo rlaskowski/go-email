@@ -12,6 +12,7 @@ const (
 
 var (
 	FileStorePath          = GetWorkingDirectory()
+	FileStore              = false
 	HttpServerPort         = 8080
 	HttpServerReadTimeout  = 30 * time.Second
 	HttpServerWriteTimeout = 30 * time.Second

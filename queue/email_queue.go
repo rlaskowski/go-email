@@ -3,12 +3,16 @@ package queue
 import (
 	"bytes"
 	"errors"
+	"io/ioutil"
+	"path/filepath"
 	"reflect"
 	"sync"
 	"time"
 
+	"github.com/rlaskowski/go-email/config"
 	"github.com/rlaskowski/go-email/email"
 	"github.com/rlaskowski/go-email/model"
+	"github.com/rlaskowski/go-email/store"
 )
 
 type EmailQueue struct {
@@ -43,8 +47,29 @@ func (e *EmailQueue) Publish(message ...interface{}) error {
 	e.mutex.Lock()
 	defer e.mutex.Unlock()
 
+	if err := e.prepareData(message); err != nil {
+		return err
+	}
+
 	e.queue = append(e.queue, message)
 
+	return nil
+}
+
+func (e *EmailQueue) prepareData(data []interface{}) error {
+	for i, m := range data {
+		t := reflect.TypeOf(m).Elem()
+
+		if t == reflect.TypeOf(&model.File{}).Elem() {
+			f := m.(*model.File)
+
+			if err := e.storeOrRead(f); err != nil {
+				return err
+			}
+
+			data[i] = f
+		}
+	}
 	return nil
 }
 
@@ -54,23 +79,21 @@ func (e *EmailQueue) Subscribe() error {
 
 func (e *EmailQueue) send() error {
 	var message *model.Message
-	var file string
+	var file *model.File
 
 	firstElement, err := e.firstElement()
 	if err != nil {
 		return err
 	}
 
-	v := reflect.ValueOf(firstElement)
+	for _, m := range firstElement.([]interface{}) {
+		t := reflect.TypeOf(m).Elem()
 
-	if v.Kind() == reflect.Slice {
-		for _, m := range firstElement.([]interface{}) {
-			switch v := reflect.ValueOf(m); v.Kind() {
-			case reflect.String:
-				file = m.(string)
-			default:
-				message = m.(*model.Message)
-			}
+		switch t {
+		case reflect.TypeOf(&model.Message{}).Elem():
+			message = m.(*model.Message)
+		case reflect.TypeOf(&model.File{}).Elem():
+			file = m.(*model.File)
 		}
 	}
 
@@ -86,21 +109,68 @@ func (e *EmailQueue) send() error {
 	return nil
 }
 
-func (e *EmailQueue) sendEmail(message *model.Message, file string) <-chan bool {
+func (e *EmailQueue) sendEmail(message *model.Message, file *model.File) <-chan bool {
 	rCh := make(chan bool, 100)
 
 	go func() {
 		email := e.acquireEmail()
+
 		err := email.Send(message, file)
 
-		if err == nil {
-			rCh <- true
+		if err != nil {
+			rCh <- false
+			close(rCh)
+			return
 		}
 
+		rCh <- true
 		close(rCh)
+
 	}()
 
 	return rCh
+}
+
+func (e *EmailQueue) storeOrRead(file *model.File) error {
+	if config.FileStore {
+
+		uuid, err := e.storeFile(file)
+		if err != nil {
+			return err
+		}
+
+		file.Key = uuid
+
+	} else {
+		data, err := ioutil.ReadAll(file.Reader)
+		if err != nil {
+			return err
+		}
+
+		file.Data = data
+
+	}
+
+	return nil
+}
+
+func (e *EmailQueue) readFile(file []byte) ([]byte, error) {
+	store := store.NewFileStore(config.FileStorePath)
+
+	dir := store.ControllDir(string(file))
+	filepath := filepath.Join(dir, string(file))
+
+	file, err := ioutil.ReadFile(filepath)
+	if err != nil {
+		return nil, err
+	}
+
+	return file, nil
+}
+
+func (e *EmailQueue) storeFile(file *model.File) (string, error) {
+	store := store.NewFileStore(config.FileStorePath)
+	return store.Store(file.Reader)
 }
 
 func (e *EmailQueue) isEmpty() bool {
