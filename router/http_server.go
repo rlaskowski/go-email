@@ -80,7 +80,7 @@ func (h *HttpServer) Stop() error {
 }
 
 func (h *HttpServer) configureEndpoints() {
-	h.Post("/send/file", h.SendWithFile)
+	h.Post("/file/send", h.SendWithFile)
 	h.Post("/send", h.Send)
 }
 

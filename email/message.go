@@ -63,20 +63,14 @@ func (m *Message) AddContent(content string) {
 }
 
 func (m *Message) AttachFile(file *model.File) {
-	m.files = append(m.files, file)
+	if file != nil {
+		m.files = append(m.files, file)
+	}
 }
 
 func (m *Message) Values(headerType string) []string {
 	s := m.header.Values(headerType)
 	return s
-}
-
-func (m *Message) create(key string, writer *textproto.Writer) {
-	s := m.header.Values(key)
-
-	for k, v := range s {
-		writer.PrintfLine("%s: %s", k, v)
-	}
 }
 
 func (m *Message) setHeaderValue(header, value string) string {
@@ -152,6 +146,12 @@ func (m *Message) write() *textproto.Writer {
 	writer.PrintfLine("Content-Type: text/plain; charset=utf-8\r\n")
 	writer.PrintfLine("%s", m.Content())
 
+	m.writeFile(boundary, writer)
+
+	return writer
+}
+
+func (m *Message) writeFile(boundary string, writer *textproto.Writer) {
 	if len(m.files) > 0 {
 		for i, file := range m.files {
 			writer.PrintfLine("\r\n\r\n--%s", boundary)
@@ -165,16 +165,11 @@ func (m *Message) write() *textproto.Writer {
 
 			writer.PrintfLine("%s", m.encodeString(string(file.Data)))
 
-			writer.PrintfLine("\r\n--%s", boundary)
-
 			if i == len(m.files) {
 				writer.PrintfLine("\r\n--%s--", boundary)
 			} else {
 				writer.PrintfLine("\r\n--%s", boundary)
 			}
 		}
-
 	}
-
-	return writer
 }
