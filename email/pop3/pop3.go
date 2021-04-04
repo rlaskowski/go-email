@@ -92,16 +92,16 @@ func (c *Client) Delete(number int) error {
 	return nil
 }
 
-func (c *Client) Retr(number int) ([]string, error) {
+func (c *Client) Retr(number int) (textproto.Reader, error) {
 	if _, err := c.cmd("RETR %d", number); err != nil {
-		return nil, err
+		return textproto.Reader{}, err
 	}
 
 	if _, err := readResponse(c.text); err != nil {
-		return nil, mail.ErrHeaderNotPresent
+		return textproto.Reader{}, err
 	}
 
-	return c.text.ReadDotLines()
+	return c.text.Reader, nil
 }
 
 func (c *Client) Stat() (string, error) {
@@ -169,16 +169,19 @@ func (c *Client) MessageCount() int {
 	return count
 }
 
-func (c *Client) readMessage() []*mail.Message {
-	var messages []*mail.Message
+func (c *Client) Message(number int) (*mail.Message, error) {
 
-	mcount := c.MessageCount()
-
-	for m := 1; m == mcount; {
-
+	retr, err := c.Retr(number)
+	if err != nil {
+		return nil, err
 	}
 
-	return messages
+	m, err := mail.ReadMessage(retr.R)
+	if err != nil {
+		return nil, err
+	}
+
+	return m, nil
 
 }
 
