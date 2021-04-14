@@ -1,6 +1,7 @@
 package pop3
 
 import (
+	"crypto/tls"
 	"errors"
 	"net"
 	"net/mail"
@@ -16,21 +17,32 @@ const (
 
 type Client struct {
 	text       *textproto.Conn
+	conn       net.Conn
+	tls        bool
 	serverName string
 }
 
-func Dial(address string) (*Client, error) {
-	conn, err := textproto.Dial("tcp", address)
+func Dial(address string, encryption bool) (*Client, error) {
+	conn, err := net.Dial("tcp", address)
 	if err != nil {
 		return nil, err
 	}
 
 	host, _, _ := net.SplitHostPort(address)
 
-	return NewClient(conn, host)
+	return NewClient(conn, host, encryption)
 }
 
-func NewClient(text *textproto.Conn, host string) (*Client, error) {
+func NewClient(conn net.Conn, host string, encryption bool) (*Client, error) {
+	var tlsConfig *tls.Config
+
+	if encryption {
+		tlsConfig = &tls.Config{ServerName: host}
+		conn = tls.Client(conn, tlsConfig)
+	}
+
+	text := textproto.NewConn(conn)
+
 	_, err := readResponse(text)
 	if err != nil {
 		text.Close()
@@ -41,6 +53,7 @@ func NewClient(text *textproto.Conn, host string) (*Client, error) {
 		text:       text,
 		serverName: host,
 	}
+	_, c.tls = conn.(*tls.Conn)
 
 	return c, nil
 }
@@ -54,6 +67,14 @@ func (c *Client) cmd(format string, args ...interface{}) (uint, error) {
 	defer c.text.EndResponse(id)
 
 	return id, nil
+}
+
+func (c *Client) auth() ([]string, error) {
+	if _, err := c.cmd("AUTH LOGIN"); err != nil {
+		return nil, err
+	}
+
+	return c.text.ReadDotLines()
 }
 
 func (c *Client) Username(username string) error {
@@ -170,7 +191,6 @@ func (c *Client) MessageCount() int {
 }
 
 func (c *Client) Message(number int) (*mail.Message, error) {
-
 	retr, err := c.Retr(number)
 	if err != nil {
 		return nil, err
@@ -182,7 +202,6 @@ func (c *Client) Message(number int) (*mail.Message, error) {
 	}
 
 	return m, nil
-
 }
 
 func readResponse(text *textproto.Conn) (string, error) {
@@ -197,7 +216,6 @@ func readResponse(text *textproto.Conn) (string, error) {
 	}
 
 	return res, nil
-
 }
 
 func parseResponse(line string) (string, error) {
@@ -212,5 +230,4 @@ func parseResponse(line string) (string, error) {
 	}
 
 	return "", errors.New("Can not define response type")
-
 }

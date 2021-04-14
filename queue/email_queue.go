@@ -243,6 +243,10 @@ func (e *EmailQueue) acquireEmail() *email.Email {
 	return e.buff.String()
 } */
 
+func (e *EmailQueue) receive() error {
+	return errors.New("Not yet implemented")
+}
+
 func (e *EmailQueue) scan() {
 	for {
 
