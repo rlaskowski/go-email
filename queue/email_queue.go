@@ -15,16 +15,29 @@ import (
 	"github.com/rlaskowski/go-email/store"
 )
 
+const (
+	SubjectReceiving QueueSubject = "receiving"
+	SubjectSending   QueueSubject = "sending"
+)
+
+type QueueSubject string
+
 type EmailQueue struct {
 	mutex     *sync.Mutex
-	queue     []interface{}
+	queue     []QueueStore
 	emailPool sync.Pool
 	buff      bytes.Buffer
+}
+
+type QueueStore struct {
+	Subject QueueSubject
+	Message interface{}
 }
 
 func NewEmailQueue() *EmailQueue {
 	e := &EmailQueue{
 		mutex: &sync.Mutex{},
+		queue: make([]QueueStore, 0),
 	}
 
 	e.emailPool.New = func() interface{} {
@@ -40,10 +53,13 @@ func (e *EmailQueue) Start() error {
 }
 
 func (e *EmailQueue) Stop() error {
+	e.queue = []QueueStore{}
 	return nil
 }
 
-func (e *EmailQueue) Publish(message ...interface{}) error {
+func (e *EmailQueue) Publish(Subject QueueSubject, message ...interface{}) error {
+	var storeMessage QueueStore
+
 	e.mutex.Lock()
 	defer e.mutex.Unlock()
 
@@ -51,7 +67,9 @@ func (e *EmailQueue) Publish(message ...interface{}) error {
 		return err
 	}
 
-	e.queue = append(e.queue, message)
+	storeMessage = QueueStore{Subject: Subject, Message: message}
+
+	e.queue = append(e.queue, storeMessage)
 
 	return nil
 }
@@ -73,7 +91,7 @@ func (e *EmailQueue) prepareData(data []interface{}) error {
 	return nil
 }
 
-func (e *EmailQueue) Subscribe() error {
+func (e *EmailQueue) Subscribe(Subject QueueSubject) error {
 	return nil
 }
 
@@ -101,7 +119,7 @@ func (e *EmailQueue) send() error {
 	case ret := <-e.sendEmail(message, file):
 		if !ret {
 
-			if err := e.Publish(message, file); err != nil {
+			if err := e.Publish(SubjectSending, message, file); err != nil {
 				return errors.New(err.Error())
 			}
 		}
@@ -113,9 +131,9 @@ func (e *EmailQueue) sendEmail(message *model.Message, file *model.File) <-chan 
 	rCh := make(chan bool, 100)
 
 	go func() {
-		email := e.acquireEmail()
+		em := e.acquireEmail()
 
-		err := email.Send(message, file)
+		err := em.Send(message, file)
 
 		if err != nil {
 			rCh <- false
@@ -209,10 +227,10 @@ func (e *EmailQueue) firstElement() (interface{}, error) {
 }
 
 func (e *EmailQueue) acquireEmail() *email.Email {
-	email := e.emailPool.Get().(*email.Email)
-	defer e.emailPool.Put(email)
+	em := e.emailPool.Get().(*email.Email)
+	defer e.emailPool.Put(em)
 
-	return email
+	return em
 }
 
 /* func (e *EmailQueue) WriteToTable() string {
@@ -244,7 +262,14 @@ func (e *EmailQueue) acquireEmail() *email.Email {
 } */
 
 func (e *EmailQueue) receive() error {
-	return errors.New("Not yet implemented")
+	em := e.acquireEmail()
+	em.Receive(func(info email.Stat) error {
+		e.Publish(SubjectReceiving, info)
+
+		return nil
+	})
+
+	return nil
 }
 
 func (e *EmailQueue) scan() {

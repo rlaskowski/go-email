@@ -122,14 +122,14 @@ func (h *HttpServer) SendWithFile(rw http.ResponseWriter, r *http.Request) {
 		rw.Write([]byte(err.Error()))
 	}
 
-	queue, err := h.registries.QueueFactory.GetOrCreate(queue.EmailQueueType)
+	que, err := h.registries.QueueFactory.GetOrCreate(queue.EmailQueueType)
 	if err != nil {
 		rw.WriteHeader(http.StatusBadRequest)
 		rw.Write([]byte(err.Error()))
 		return
 	}
 
-	if err := queue.Publish(message, file); err != nil {
+	if err := que.Publish(queue.SubjectSending, message, file); err != nil {
 		rw.WriteHeader(http.StatusBadRequest)
 		rw.Write([]byte(err.Error()))
 		return
@@ -158,12 +158,12 @@ func (h *HttpServer) Send(rw http.ResponseWriter, r *http.Request) {
 		result = h.multiFailure(err.Error())
 	}
 
-	queue, err := h.registries.QueueFactory.GetOrCreate(queue.EmailQueueType)
+	que, err := h.registries.QueueFactory.GetOrCreate(queue.EmailQueueType)
 	if err != nil {
 		result = h.multiFailure(err.Error())
 	}
 
-	if err := queue.Publish(message); err != nil {
+	if err := que.Publish(queue.SubjectSending, message); err != nil {
 		result = h.multiFailure(err.Error())
 	}
 

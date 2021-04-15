@@ -27,5 +27,3 @@ func (m *MessageInfo) FindBySender(sender string) ([]*MessageInfo, error) {
 func (m *MessageInfo) FindBySubject(subject string) ([]*MessageInfo, error) {
 	return nil, errors.New("Not yet implemented")
 }
-
-func (m *MessageInfo) parseMessage()
