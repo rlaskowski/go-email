@@ -1,12 +1,12 @@
 package email
 
-import "errors"
+import (
+	"errors"
+	"net/mail"
+)
 
 type MessageInfo struct {
-	Sender    string `json:"sender"`
-	Recipient string `json:"recipient"`
-	Subject   string `json:"subject"`
-	Content   string `json:"content"`
+	mail *mail.Message
 }
 
 type Stat struct {
@@ -15,15 +15,18 @@ type Stat struct {
 	ID            int    `json:"id"`
 }
 
+func NewMessageInfo(mail *mail.Message) *MessageInfo {
+	return &MessageInfo{mail}
+}
+
 func (m *MessageInfo) FindAll() ([]*MessageInfo, error) {
 	return nil, errors.New("Not yet implemented")
 }
 
-func (m *MessageInfo) FindBySender(sender string) ([]*MessageInfo, error) {
-	return nil, errors.New("Not yet implemented")
-
+func (m *MessageInfo) Sender() string {
+	return m.mail.Header.Get("Sender")
 }
 
-func (m *MessageInfo) FindBySubject(subject string) ([]*MessageInfo, error) {
-	return nil, errors.New("Not yet implemented")
+func (m *MessageInfo) Subject() string {
+	return m.mail.Header.Get("Subject")
 }

@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/rlaskowski/go-email/config"
 	"github.com/rlaskowski/go-email/email/pop3"
@@ -23,18 +24,51 @@ type ReceiveFunc func(info Stat) error
 type Email struct {
 	config []*Config
 	smtp   *SMTPServer
-	pop3   *pop3.Client
+	pop3   map[string]*pop3.Client
+	mutex  *sync.Mutex
 }
 
 func NewEmail() *Email {
-	c, err := loadConfig()
-	if err != nil {
-		c = make([]*Config, 0)
-	}
 	return &Email{
-		config: c,
-		smtp:   new(SMTPServer),
+		smtp:  new(SMTPServer),
+		pop3:  make(map[string]*pop3.Client),
+		mutex: &sync.Mutex{},
 	}
+}
+
+func (e *Email) Start() error {
+	log.Print("Starting Email")
+	return e.configure()
+}
+
+func (e *Email) Stop() error {
+	log.Print("Stopping Email...")
+	return e.close()
+}
+
+func (e *Email) configure() error {
+	config, err := loadConfig()
+	if err != nil {
+		return err
+	}
+
+	e.config = config
+
+	for _, c := range e.config {
+		e.client(c.Key)
+	}
+
+	return nil
+}
+
+func (e *Email) close() error {
+	for _, c := range e.pop3 {
+		if err := c.Close(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 //Sending email
@@ -58,18 +92,12 @@ func (e *Email) Send(message *model.Message, file *model.File) error {
 
 func (e *Email) Receive(fn ReceiveFunc) error {
 	for _, c := range e.config {
-		address := net.JoinHostPort(c.POP3.Hostname, fmt.Sprintf("%d", c.POP3.Port))
-		dial, err := pop3.Dial(address, c.POP3.Encryption)
-
+		client, err := e.client(c.Key)
 		if err != nil {
-			return fmt.Errorf("Could not connect to POP3 due to: %s", err.Error())
-		}
-
-		if err := dial.Auth(c.Username, c.Password); err != nil {
 			return err
 		}
 
-		if list, err := dial.List(); err == nil {
+		if list, err := client.List(); err == nil {
 			for _, l := range list {
 				stat := strings.Split(l, " ")
 
@@ -87,15 +115,18 @@ func (e *Email) Receive(fn ReceiveFunc) error {
 			}
 		}
 
-		dial.Close()
-
 	}
 
 	return nil
 }
 
-func (e *Email) ReadMessage(number int) (*mail.Message, error) {
-	retr, err := e.pop3.Retr(number)
+func (e *Email) ReadMessage(key string, number int) (*MessageInfo, error) {
+	client, err := e.client(key)
+	if err != nil {
+		return &MessageInfo{}, err
+	}
+
+	retr, err := client.Retr(number)
 	if err != nil {
 		return nil, err
 	}
@@ -105,17 +136,7 @@ func (e *Email) ReadMessage(number int) (*mail.Message, error) {
 		return nil, err
 	}
 
-	return m, nil
-}
-
-func (e *Email) receive(client *pop3.Client, fn ReceiveFunc) error {
-	list, err := client.List()
-	if err != nil {
-		return err
-	}
-	fmt.Println(list)
-
-	return nil
+	return NewMessageInfo(m), nil
 }
 
 func (e *Email) send(config *Config, message *Message) error {
@@ -135,6 +156,36 @@ func (e *Email) send(config *Config, message *Message) error {
 	log.Printf("Email was sended successful to %s, client key %s", message.Recipients(), config.Key)
 
 	return nil
+}
+
+func (e *Email) client(key string) (*pop3.Client, error) {
+	e.mutex.Lock()
+	defer e.mutex.Unlock()
+
+	if client, ok := e.pop3[key]; ok {
+		return client, nil
+	}
+
+	c, err := e.configByKey(key)
+	if err != nil {
+		return &pop3.Client{}, err
+	}
+
+	address := net.JoinHostPort(c.POP3.Hostname, fmt.Sprintf("%d", c.POP3.Port))
+	dial, err := pop3.Dial(address, c.POP3.Encryption)
+
+	if err != nil {
+		return &pop3.Client{}, err
+	}
+
+	if err := dial.Auth(c.Username, c.Password); err != nil {
+		return &pop3.Client{}, err
+	}
+
+	e.pop3[key] = dial
+
+	return dial, nil
+
 }
 
 func loadConfig() ([]*Config, error) {

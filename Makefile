@@ -27,3 +27,7 @@ clean:
 	@echo "Cleaning..."
 	@rm -Rf dist
 	@echo "All cleaned"
+generate-protobuf:	
+	@echo "Generating new proto files..."
+	@find grpc/protobuf -type f -iname \*.pb.go -delete
+	@protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative grpc/protobuf/emailqueue/*

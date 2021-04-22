@@ -61,7 +61,7 @@ func (h *HttpServer) Start() error {
 	go func() {
 		h.configureEndpoints()
 
-		log.Printf("Starting REST API on http://localhost:%d", config.HttpServerPort)
+		log.Printf("Starting REST API on %d port", config.HttpServerPort)
 
 		if err := h.server.ListenAndServe(); err != nil {
 			log.Fatalf("Caught error while starting server: %s", err.Error())
@@ -82,6 +82,7 @@ func (h *HttpServer) Stop() error {
 func (h *HttpServer) configureEndpoints() {
 	h.Post("/file/send", h.SendWithFile)
 	h.Post("/send", h.Send)
+	h.Get("/receive/list", h.ReceiveList)
 }
 
 func (h *HttpServer) Get(path string, handler http.HandlerFunc) {
@@ -94,6 +95,18 @@ func (h *HttpServer) Post(path string, handler http.HandlerFunc) {
 
 func (h *HttpServer) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	h.router.ServeHTTP(rw, r)
+}
+
+func (h *HttpServer) ReceiveList(rw http.ResponseWriter, r *http.Request) {
+	que, err := h.registries.QueueFactory.GetOrCreate(queue.EmailQueueType)
+	if err != nil {
+		rw.WriteHeader(http.StatusBadRequest)
+		rw.Write([]byte(err.Error()))
+		return
+	}
+
+	list, _ := que.Subscribe(queue.SubjectReceiving)
+	h.json(rw, list)
 }
 
 func (h *HttpServer) SendWithFile(rw http.ResponseWriter, r *http.Request) {

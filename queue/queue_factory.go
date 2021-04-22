@@ -3,6 +3,8 @@ package queue
 import (
 	"log"
 	"sync"
+
+	"github.com/rlaskowski/go-email/email"
 )
 
 var (
@@ -17,12 +19,14 @@ type Queue struct {
 
 type QueueFactory struct {
 	factory map[QueueType]Queue
+	email   *email.Email
 	mutex   *sync.Mutex
 }
 
-func NewFactory() *QueueFactory {
+func NewFactory(email *email.Email) *QueueFactory {
 	return &QueueFactory{
 		factory: make(map[QueueType]Queue),
+		email:   email,
 		mutex:   &sync.Mutex{},
 	}
 }
@@ -56,7 +60,7 @@ func (q *QueueFactory) GetOrCreate(key QueueType) (QueueConnection, error) {
 }
 
 func (q *QueueFactory) createEmailQueue(key QueueType) (*EmailQueue, error) {
-	emailq := NewEmailQueue()
+	emailq := NewEmailQueue(q.email)
 
 	if err := emailq.Start(); err != nil {
 		return nil, err

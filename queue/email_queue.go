@@ -23,88 +23,92 @@ const (
 type QueueSubject string
 
 type EmailQueue struct {
-	mutex     *sync.Mutex
-	queue     []QueueStore
-	emailPool sync.Pool
-	buff      bytes.Buffer
+	mutex *sync.Mutex
+	queue []QueueStore
+	email *email.Email
+	buff  bytes.Buffer
 }
 
 type QueueStore struct {
 	Subject QueueSubject
-	Message interface{}
+	Message []interface{}
 }
 
-func NewEmailQueue() *EmailQueue {
-	e := &EmailQueue{
+func NewEmailQueue(email *email.Email) *EmailQueue {
+	return &EmailQueue{
 		mutex: &sync.Mutex{},
 		queue: make([]QueueStore, 0),
+		email: email,
 	}
-
-	e.emailPool.New = func() interface{} {
-		return email.NewEmail()
-	}
-
-	return e
 }
 
 func (e *EmailQueue) Start() error {
-	go e.scan()
+	go e.start()
 	return nil
 }
 
 func (e *EmailQueue) Stop() error {
-	e.queue = []QueueStore{}
 	return nil
 }
 
 func (e *EmailQueue) Publish(Subject QueueSubject, message ...interface{}) error {
-	var storeMessage QueueStore
-
-	e.mutex.Lock()
-	defer e.mutex.Unlock()
-
 	if err := e.prepareData(message); err != nil {
 		return err
 	}
 
-	storeMessage = QueueStore{Subject: Subject, Message: message}
-
-	e.queue = append(e.queue, storeMessage)
+	storeMessage := QueueStore{Subject: Subject, Message: message}
+	e.enqueue(storeMessage)
 
 	return nil
 }
 
 func (e *EmailQueue) prepareData(data []interface{}) error {
 	for i, m := range data {
-		t := reflect.TypeOf(m).Elem()
+		if reflect.TypeOf(m).Kind() == reflect.Slice {
+			t := reflect.TypeOf(m).Elem()
 
-		if t == reflect.TypeOf(&model.File{}).Elem() {
-			f := m.(*model.File)
+			if t == reflect.TypeOf(&model.File{}).Elem() {
+				f := m.(*model.File)
 
-			if err := e.storeOrRead(f); err != nil {
-				return err
+				if err := e.storeOrRead(f); err != nil {
+					return err
+				}
+
+				data[i] = f
 			}
-
-			data[i] = f
 		}
+
 	}
 	return nil
 }
 
-func (e *EmailQueue) Subscribe(Subject QueueSubject) error {
-	return nil
+func (e *EmailQueue) Subscribe(Subject QueueSubject) ([]QueueStore, error) {
+	var list []QueueStore
+	if !(e.len() > 0) {
+		return nil, errors.New("Not email to receive")
+	}
+
+	qslist := e.queue
+	for _, l := range qslist {
+		if l.Subject == SubjectReceiving {
+			list = append(list, l)
+		}
+	}
+
+	return list, nil
 }
 
 func (e *EmailQueue) send() error {
 	var message *model.Message
 	var file *model.File
 
-	firstElement, err := e.firstElement()
-	if err != nil {
-		return err
+	dequeue := <-e.dequeue()
+
+	if !(dequeue.Subject == SubjectSending) {
+		return nil
 	}
 
-	for _, m := range firstElement.([]interface{}) {
+	for _, m := range dequeue.Message {
 		t := reflect.TypeOf(m).Elem()
 
 		switch t {
@@ -131,7 +135,7 @@ func (e *EmailQueue) sendEmail(message *model.Message, file *model.File) <-chan 
 	rCh := make(chan bool, 100)
 
 	go func() {
-		em := e.acquireEmail()
+		em := e.email
 
 		err := em.Send(message, file)
 
@@ -192,45 +196,37 @@ func (e *EmailQueue) storeFile(file *model.File) (string, error) {
 }
 
 func (e *EmailQueue) isEmpty() bool {
-	if !(len(e.queue) > 0) {
+	if len(e.queue) == 0 {
 		return true
 	}
 	return false
 }
 
-func (e *EmailQueue) lastElement() (interface{}, error) {
-	e.mutex.Lock()
-	defer e.mutex.Unlock()
-
-	if e.isEmpty() {
-		return nil, errors.New("No elements")
-	}
-
-	element := e.queue[len(e.queue)]
-	e.queue = e.queue[:len(e.queue)-1]
-
-	return element, nil
+func (e *EmailQueue) len() int {
+	return len(e.queue)
 }
 
-func (e *EmailQueue) firstElement() (interface{}, error) {
-	e.mutex.Lock()
-	defer e.mutex.Unlock()
-
-	if e.isEmpty() {
-		return nil, errors.New("No elements")
-	}
-
-	element := e.queue[0]
-	e.queue = e.queue[1:]
-
-	return element, nil
+func (e *EmailQueue) enqueue(qstore QueueStore) {
+	e.queue = append(e.queue, qstore)
 }
 
-func (e *EmailQueue) acquireEmail() *email.Email {
-	em := e.emailPool.Get().(*email.Email)
-	defer e.emailPool.Put(em)
+func (e *EmailQueue) dequeue() <-chan QueueStore {
+	qsch := make(chan QueueStore)
 
-	return em
+	go func() {
+
+		if !e.isEmpty() {
+
+			element := e.queue[0]
+			e.queue = e.queue[1:]
+			qsch <- element
+		}
+
+		close(qsch)
+
+	}()
+
+	return qsch
 }
 
 /* func (e *EmailQueue) WriteToTable() string {
@@ -262,22 +258,44 @@ func (e *EmailQueue) acquireEmail() *email.Email {
 } */
 
 func (e *EmailQueue) receive() error {
-	em := e.acquireEmail()
-	em.Receive(func(info email.Stat) error {
-		e.Publish(SubjectReceiving, info)
+	go func() {
+		em := e.email
+		em.Receive(func(info email.Stat) error {
 
-		return nil
-	})
+			if !e.findReceive(info) {
+				e.Publish(SubjectReceiving, info)
+			}
+
+			return nil
+		})
+	}()
 
 	return nil
 }
 
-func (e *EmailQueue) scan() {
+func (e *EmailQueue) findReceive(info email.Stat) bool {
+	for _, i := range e.queue {
+		if i.Subject == SubjectReceiving {
+			if i.Message[0] == info {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (e *EmailQueue) start() {
 	for {
 
 		if err := e.send(); err != nil {
-			time.Sleep(time.Second * 3)
+
 		}
+
+		if err := e.receive(); err != nil {
+
+		}
+
+		time.Sleep(config.QueueRefreshTime)
 
 	}
 }

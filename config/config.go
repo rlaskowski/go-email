@@ -17,4 +17,6 @@ var (
 	HttpServerReadTimeout  = 30 * time.Second
 	HttpServerWriteTimeout = 30 * time.Second
 	HttpMaxHeaderSize      = 1024 * 4
+	GrpcListenPort         = 9090
+	QueueRefreshTime       = 5 * time.Second
 )
