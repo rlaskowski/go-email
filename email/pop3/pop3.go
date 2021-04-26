@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"net"
-	"net/mail"
 	"net/textproto"
 	"strconv"
 	"strings"
@@ -188,20 +187,6 @@ func (c *Client) MessageCount() int {
 	}
 
 	return count
-}
-
-func (c *Client) Message(number int) (*mail.Message, error) {
-	retr, err := c.Retr(number)
-	if err != nil {
-		return nil, err
-	}
-
-	m, err := mail.ReadMessage(retr.R)
-	if err != nil {
-		return nil, err
-	}
-
-	return m, nil
 }
 
 func readResponse(text *textproto.Conn) (string, error) {

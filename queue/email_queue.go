@@ -52,6 +52,9 @@ func (e *EmailQueue) Stop() error {
 }
 
 func (e *EmailQueue) Publish(Subject QueueSubject, message ...interface{}) error {
+	e.mutex.Lock()
+	defer e.mutex.Unlock()
+
 	if err := e.prepareData(message); err != nil {
 		return err
 	}
@@ -60,6 +63,25 @@ func (e *EmailQueue) Publish(Subject QueueSubject, message ...interface{}) error
 	e.enqueue(storeMessage)
 
 	return nil
+}
+
+func (e *EmailQueue) Subscribe(Subject QueueSubject) ([]QueueStore, error) {
+	e.mutex.Lock()
+	defer e.mutex.Unlock()
+
+	var list []QueueStore
+	if !(e.len() > 0) {
+		return nil, errors.New("Not email to receive")
+	}
+
+	qslist := e.queue
+	for _, l := range qslist {
+		if l.Subject == SubjectReceiving {
+			list = append(list, l)
+		}
+	}
+
+	return list, nil
 }
 
 func (e *EmailQueue) prepareData(data []interface{}) error {
@@ -80,22 +102,6 @@ func (e *EmailQueue) prepareData(data []interface{}) error {
 
 	}
 	return nil
-}
-
-func (e *EmailQueue) Subscribe(Subject QueueSubject) ([]QueueStore, error) {
-	var list []QueueStore
-	if !(e.len() > 0) {
-		return nil, errors.New("Not email to receive")
-	}
-
-	qslist := e.queue
-	for _, l := range qslist {
-		if l.Subject == SubjectReceiving {
-			list = append(list, l)
-		}
-	}
-
-	return list, nil
 }
 
 func (e *EmailQueue) send() error {
@@ -229,34 +235,6 @@ func (e *EmailQueue) dequeue() <-chan QueueStore {
 	return qsch
 }
 
-/* func (e *EmailQueue) WriteToTable() string {
-	writer := new(tabwriter.Writer)
-
-	e.buff.Reset()
-
-	sink := bufio.NewWriter(&e.buff)
-	writer.Init(sink, 0, 8, 2, ' ', tabwriter.Debug)
-
-	_, _ = fmt.Fprintln(writer, "Host \t Pathname ")
-
-	_ = d.IterateAll(func(database Database) error {
-		_, _ = fmt.Fprintf(writer, "%s \t %s \n", database.databaseConnection.Host(), database.databaseConnection.Path())
-		return nil
-	})
-
-	_, _ = fmt.Fprintln(writer)
-
-	if err := writer.Flush(); err != nil {
-		return err.Error()
-	}
-
-	if err := sink.Flush(); err != nil {
-		return err.Error()
-	}
-
-	return e.buff.String()
-} */
-
 func (e *EmailQueue) receive() error {
 	go func() {
 		em := e.email
@@ -285,17 +263,15 @@ func (e *EmailQueue) findReceive(info email.Stat) bool {
 }
 
 func (e *EmailQueue) start() {
-	for {
 
-		if err := e.send(); err != nil {
-
-		}
-
-		if err := e.receive(); err != nil {
-
-		}
-
-		time.Sleep(config.QueueRefreshTime)
+	if err := e.send(); err != nil {
 
 	}
+
+	if err := e.receive(); err != nil {
+
+	}
+
+	time.Sleep(config.QueueRefreshTime)
+
 }

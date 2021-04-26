@@ -24,14 +24,12 @@ type ReceiveFunc func(info Stat) error
 type Email struct {
 	config []*Config
 	smtp   *SMTPServer
-	pop3   map[string]*pop3.Client
 	mutex  *sync.Mutex
 }
 
 func NewEmail() *Email {
 	return &Email{
 		smtp:  new(SMTPServer),
-		pop3:  make(map[string]*pop3.Client),
 		mutex: &sync.Mutex{},
 	}
 }
@@ -43,7 +41,7 @@ func (e *Email) Start() error {
 
 func (e *Email) Stop() error {
 	log.Print("Stopping Email...")
-	return e.close()
+	return nil
 }
 
 func (e *Email) configure() error {
@@ -53,20 +51,6 @@ func (e *Email) configure() error {
 	}
 
 	e.config = config
-
-	for _, c := range e.config {
-		e.client(c.Key)
-	}
-
-	return nil
-}
-
-func (e *Email) close() error {
-	for _, c := range e.pop3 {
-		if err := c.Close(); err != nil {
-			return err
-		}
-	}
 
 	return nil
 }
@@ -93,6 +77,8 @@ func (e *Email) Send(message *model.Message, file *model.File) error {
 func (e *Email) Receive(fn ReceiveFunc) error {
 	for _, c := range e.config {
 		client, err := e.client(c.Key)
+		defer client.Close()
+
 		if err != nil {
 			return err
 		}
@@ -122,21 +108,19 @@ func (e *Email) Receive(fn ReceiveFunc) error {
 
 func (e *Email) ReadMessage(key string, number int) (*MessageInfo, error) {
 	client, err := e.client(key)
+	defer client.Close()
+
 	if err != nil {
 		return &MessageInfo{}, err
 	}
 
-	retr, err := client.Retr(number)
+	r, err := client.Retr(number)
 	if err != nil {
-		return nil, err
+		return &MessageInfo{}, err
 	}
 
-	m, err := mail.ReadMessage(retr.R)
-	if err != nil {
-		return nil, err
-	}
+	return NewMessageInfo(r), nil
 
-	return NewMessageInfo(m), nil
 }
 
 func (e *Email) send(config *Config, message *Message) error {
@@ -159,13 +143,6 @@ func (e *Email) send(config *Config, message *Message) error {
 }
 
 func (e *Email) client(key string) (*pop3.Client, error) {
-	e.mutex.Lock()
-	defer e.mutex.Unlock()
-
-	if client, ok := e.pop3[key]; ok {
-		return client, nil
-	}
-
 	c, err := e.configByKey(key)
 	if err != nil {
 		return &pop3.Client{}, err
@@ -181,8 +158,6 @@ func (e *Email) client(key string) (*pop3.Client, error) {
 	if err := dial.Auth(c.Username, c.Password); err != nil {
 		return &pop3.Client{}, err
 	}
-
-	e.pop3[key] = dial
 
 	return dial, nil
 

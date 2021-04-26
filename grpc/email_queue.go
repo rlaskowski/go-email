@@ -22,58 +22,9 @@ func NewEmailQueue(queueFactory *queue.QueueFactory, emserv *email.Email) *Email
 }
 
 func (e *EmailQueue) ReceiveList(request *emailqueue.ReceiveRequest, stream emailqueue.EmailService_ReceiveListServer) error {
-	return e.receiveStatList(stream)
-}
-
-func (e *EmailQueue) ReceiveMessage(request *emailqueue.ReceiveRequest, stream emailqueue.EmailService_ReceiveMessageServer) error {
-
-	que := e.emailQueue()
-
-	sub, err := que.Subscribe(queue.SubjectReceiving)
-	if err != nil {
-		return nil
-	}
-
-	resp := new(emailqueue.ReceiveMessageResponse)
-
-	for _, s := range sub {
-		stat, ok := s.Message[0].(email.Stat)
-		if !ok {
-			return errors.New("Could not convert Message to Stat")
-		}
-
-		info, err := e.emailServ.ReadMessage(request.Key, stat.MessageNumber)
-		if err != nil {
-			return err
-		}
-
-		message := emailqueue.ReceiveMessage{Sender: info.Sender(), Subject: info.Subject()}
-
-		resp.ReceiveMessage = &message
-
-		if err := stream.Send(resp); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (e *EmailQueue) receiveStatList(stream emailqueue.EmailService_ReceiveListServer) error {
-	que := e.emailQueue()
-
-	sub, err := que.Subscribe(queue.SubjectReceiving)
-	if err != nil {
-		return nil
-	}
-
 	resp := new(emailqueue.ReceiveStatResponse)
 
-	for _, s := range sub {
-		stat, ok := s.Message[0].(email.Stat)
-		if !ok {
-			return errors.New("Could not convert Message to Stat")
-		}
+	err := e.receiveStatList(func(stat email.Stat) error {
 
 		receiveStat := &emailqueue.ReceiveStat{Key: stat.Key, MessageNumber: int32(stat.MessageNumber), MessageId: int32(stat.ID)}
 		resp.ReceiveStat = receiveStat
@@ -81,6 +32,85 @@ func (e *EmailQueue) receiveStatList(stream emailqueue.EmailService_ReceiveListS
 		if err := stream.Send(resp); err != nil {
 			return err
 		}
+
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (e *EmailQueue) ReceiveMessage(request *emailqueue.ReceiveMessageRequest, stream emailqueue.EmailService_ReceiveMessageServer) error {
+	resp := new(emailqueue.ReceiveMessageResponse)
+
+	err := e.receiveStatList(func(stat email.Stat) error {
+
+		info, err := e.emailServ.ReadMessage(request.Key, stat.MessageNumber)
+
+		if err != nil {
+			return err
+		}
+
+		sender := info.Sender()
+
+		message := emailqueue.ReceiveMessage{
+			Sender: &emailqueue.Address{
+				Name:    sender.Name,
+				Address: sender.Address,
+			},
+			Subject: info.Subject(),
+		}
+
+		resp.ReceiveMessage = &message
+
+		files, err := info.Files()
+		if err != nil {
+			return err
+		}
+
+		for _, f := range files {
+			file := &emailqueue.File{
+				Name: f.Name,
+				Data: f.Data,
+			}
+
+			resp.ReceiveMessage.File = append(resp.ReceiveMessage.File, file)
+
+		}
+
+		if err := stream.Send(resp); err != nil {
+			return err
+		}
+
+		return nil
+
+	})
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (e *EmailQueue) receiveStatList(fn email.ReceiveFunc) error {
+	que := e.emailQueue()
+
+	sub, err := que.Subscribe(queue.SubjectReceiving)
+	if err != nil {
+		return nil
+	}
+
+	for _, s := range sub {
+		stat, ok := s.Message[0].(email.Stat)
+		if !ok {
+			return errors.New("Could not convert Message to Stat")
+		}
+
+		fn(email.Stat{Key: stat.Key, MessageNumber: stat.MessageNumber, ID: stat.ID})
 	}
 
 	return nil
