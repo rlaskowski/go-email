@@ -68,14 +68,6 @@ func (c *Client) cmd(format string, args ...interface{}) (uint, error) {
 	return id, nil
 }
 
-func (c *Client) auth() ([]string, error) {
-	if _, err := c.cmd("AUTH LOGIN"); err != nil {
-		return nil, err
-	}
-
-	return c.text.ReadDotLines()
-}
-
 func (c *Client) Username(username string) error {
 	if _, err := c.cmd("USER %s", username); err != nil {
 		return err

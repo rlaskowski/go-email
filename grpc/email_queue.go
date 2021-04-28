@@ -43,7 +43,7 @@ func (e *EmailQueue) ReceiveList(request *emailqueue.ReceiveRequest, stream emai
 	return nil
 }
 
-func (e *EmailQueue) ReceiveMessage(request *emailqueue.ReceiveMessageRequest, stream emailqueue.EmailService_ReceiveMessageServer) error {
+func (e *EmailQueue) ReceiveMessage(request *emailqueue.ReceiveRequest, stream emailqueue.EmailService_ReceiveMessageServer) error {
 	resp := new(emailqueue.ReceiveMessageResponse)
 
 	err := e.receiveStatList(func(stat email.Stat) error {
@@ -57,7 +57,7 @@ func (e *EmailQueue) ReceiveMessage(request *emailqueue.ReceiveMessageRequest, s
 		sender := info.Sender()
 
 		message := emailqueue.ReceiveMessage{
-			Sender: &emailqueue.Address{
+			Address: &emailqueue.Address{
 				Name:    sender.Name,
 				Address: sender.Address,
 			},
@@ -77,7 +77,7 @@ func (e *EmailQueue) ReceiveMessage(request *emailqueue.ReceiveMessageRequest, s
 				Data: f.Data,
 			}
 
-			resp.ReceiveMessage.File = append(resp.ReceiveMessage.File, file)
+			resp.ReceiveMessage.Files = append(resp.ReceiveMessage.Files, file)
 
 		}
 
