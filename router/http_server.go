@@ -12,8 +12,6 @@ import (
 	"github.com/bmizerany/pat"
 	"github.com/rlaskowski/go-email/config"
 	"github.com/rlaskowski/go-email/controller"
-	"github.com/rlaskowski/go-email/model"
-	"github.com/rlaskowski/go-email/queue"
 	"github.com/rlaskowski/go-email/registries"
 )
 
@@ -98,7 +96,7 @@ func (h *HttpServer) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HttpServer) ReceiveList(rw http.ResponseWriter, r *http.Request) {
-	que, err := h.registries.QueueFactory.GetOrCreate(queue.EmailQueueType)
+	/* que, err := h.registries.QueueFactory.GetOrCreate(queue.EmailQueueType)
 	if err != nil {
 		rw.WriteHeader(http.StatusBadRequest)
 		rw.Write([]byte(err.Error()))
@@ -106,11 +104,11 @@ func (h *HttpServer) ReceiveList(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	list, _ := que.Subscribe(queue.SubjectReceiving)
-	h.json(rw, list)
+	h.json(rw, list) */
 }
 
 func (h *HttpServer) SendWithFile(rw http.ResponseWriter, r *http.Request) {
-	var result error
+	/*var result error
 
 	multipartReader, err := r.MultipartReader()
 	if err != nil {
@@ -142,7 +140,7 @@ func (h *HttpServer) SendWithFile(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := que.Publish(queue.SubjectSending, message, file); err != nil {
+	 if err := que.Publish(queue.SubjectSending, message, file); err != nil {
 		rw.WriteHeader(http.StatusBadRequest)
 		rw.Write([]byte(err.Error()))
 		return
@@ -156,12 +154,12 @@ func (h *HttpServer) SendWithFile(rw http.ResponseWriter, r *http.Request) {
 			"result": "Message published successfully",
 		})
 		rw.WriteHeader(http.StatusOK)
-	}
+	}*/
 
 }
 
 func (h *HttpServer) Send(rw http.ResponseWriter, r *http.Request) {
-	var result error
+	/*var result error
 
 	messageForm := r.FormValue("message")
 
@@ -171,7 +169,7 @@ func (h *HttpServer) Send(rw http.ResponseWriter, r *http.Request) {
 		result = h.multiFailure(err.Error())
 	}
 
-	que, err := h.registries.QueueFactory.GetOrCreate(queue.EmailQueueType)
+	 que, err := h.registries.QueueFactory.GetOrCreate(queue.EmailQueueType)
 	if err != nil {
 		result = h.multiFailure(err.Error())
 	}
@@ -188,7 +186,7 @@ func (h *HttpServer) Send(rw http.ResponseWriter, r *http.Request) {
 			"result": "Message published successfully",
 		})
 		rw.WriteHeader(http.StatusOK)
-	}
+	}*/
 
 }
 

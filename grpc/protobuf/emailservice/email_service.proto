@@ -1,0 +1,37 @@
+syntax="proto3";
+
+option go_package = "grpc/protobuf/emailservice";
+
+package emailservice;
+
+message ReceiveMessage {
+    string id = 1;
+    Address address  = 2;
+    string subject = 3;
+    repeated File files = 4;
+}
+
+message Address {
+    string name = 1;
+    string address = 2;
+}
+
+message File {
+    string name = 1;
+    bytes data = 2;
+}
+
+message ReceiveMessageRequest {
+    string key = 1;
+    int32 message_number = 2;
+}
+
+message ReceiveMessageResponse {
+    ReceiveMessage receiveMessage = 1;
+}
+
+service EmailService {
+    rpc ReceiveMessage(ReceiveMessageRequest) returns (stream ReceiveMessageResponse) {}
+}
+
+

@@ -9,6 +9,7 @@ import (
 	"net/mail"
 	"net/smtp"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -45,7 +46,7 @@ func (e *Email) Stop() error {
 }
 
 func (e *Email) configure() error {
-	config, err := loadConfig()
+	config, err := e.loadConfig()
 	if err != nil {
 		return err
 	}
@@ -74,7 +75,7 @@ func (e *Email) Send(message *model.Message, file *model.File) error {
 	return e.send(c, m)
 }
 
-func (e *Email) Receive(fn ReceiveFunc) error {
+func (e *Email) ReceiveStat(fn ReceiveFunc) error {
 	for _, c := range e.config {
 		client, err := e.client(c.Key)
 		defer client.Close()
@@ -163,10 +164,10 @@ func (e *Email) client(key string) (*pop3.Client, error) {
 
 }
 
-func loadConfig() ([]*Config, error) {
+func (e *Email) loadConfig() ([]*Config, error) {
 	var configList []*Config
 
-	path := fmt.Sprintf("%s/config.yaml", config.GetWorkingDirectory())
+	path := filepath.Join(config.GetWorkingDirectory(), "config.yaml")
 
 	file, err := os.Open(path)
 	defer file.Close()

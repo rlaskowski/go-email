@@ -2,8 +2,8 @@ package email
 
 import (
 	"bytes"
+	"encoding/base64"
 	"io"
-	"io/ioutil"
 	"mime"
 	"mime/multipart"
 	"net/mail"
@@ -19,7 +19,7 @@ type MessageInfo struct {
 type Stat struct {
 	Key           string `json:"access_key"`
 	MessageNumber int    `json:"message_number"`
-	ID            int    `json:"id"`
+	ID            int    `json:"message_id"`
 }
 
 type File struct {
@@ -67,6 +67,11 @@ func (m *MessageInfo) Subject() string {
 	return m.message.Header.Get("Subject")
 }
 
+func (m *MessageInfo) MessageId() string {
+	messageid := m.message.Header.Get("Message-ID")
+	return strings.Trim(messageid, "<>")
+}
+
 func (m *MessageInfo) Files() ([]File, error) {
 	files := make([]File, 0)
 
@@ -90,16 +95,27 @@ func (m *MessageInfo) Files() ([]File, error) {
 			}
 
 			if len(part.FileName()) > 0 {
-				df, err := ioutil.ReadAll(part)
+				filedata, err := m.decodeFile(part)
 				if err != nil {
 					return nil, err
 				}
 
-				files = append(files, File{Name: part.FileName(), Data: df})
+				files = append(files, File{Name: part.FileName(), Data: filedata})
 			}
 
 		}
 	}
 
 	return files, nil
+}
+
+func (m *MessageInfo) decodeFile(part *multipart.Part) ([]byte, error) {
+	b := bytes.Buffer{}
+	d := base64.NewDecoder(base64.StdEncoding, part)
+
+	if _, err := b.ReadFrom(d); err != nil {
+		return nil, err
+	}
+
+	return b.Bytes(), nil
 }
