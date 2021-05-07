@@ -18,8 +18,8 @@ type MessageInfo struct {
 
 type Stat struct {
 	Key           string `json:"access_key"`
-	MessageNumber int    `json:"message_number"`
-	ID            int    `json:"message_id"`
+	MessageNumber int64  `json:"message_number"`
+	ID            int64  `json:"message_id"`
 }
 
 type File struct {
@@ -34,14 +34,14 @@ func NewMessageInfo(reader textproto.Reader) *MessageInfo {
 func newMessageInfo(reader textproto.Reader) *MessageInfo {
 	line, err := reader.ReadDotBytes()
 	if err != nil {
-		return &MessageInfo{}
+		return nil
 	}
 
 	b := bytes.NewReader(line)
 
 	message, err := mail.ReadMessage(b)
 	if err != nil {
-		return &MessageInfo{}
+		return nil
 	}
 
 	m := &MessageInfo{
@@ -57,7 +57,7 @@ func (m *MessageInfo) Sender() *mail.Address {
 
 	address, err := mail.ParseAddress(from)
 	if err != nil {
-		return &mail.Address{}
+		return nil
 	}
 
 	return address

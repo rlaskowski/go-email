@@ -21,17 +21,19 @@ message File {
     bytes data = 2;
 }
 
-message ReceiveMessageRequest {
+message AuthRequest {
     string key = 1;
-    int32 message_number = 2;
 }
 
-message ReceiveMessageResponse {
-    ReceiveMessage receiveMessage = 1;
+message MessageRequest {
+    AuthRequest authRequest = 1;
+    int64 message_number = 2;
 }
+
 
 service EmailService {
-    rpc ReceiveMessage(ReceiveMessageRequest) returns (stream ReceiveMessageResponse) {}
+    rpc ListMessages(AuthRequest) returns (stream ReceiveMessage) {}
+    rpc Message(MessageRequest) returns (stream ReceiveMessage) {}
 }
 
 

@@ -22,46 +22,57 @@ func NewEmailQueue(queueFactory *queue.QueueFactory, emserv *email.Email) *Email
 	}
 }
 
-func (e *EmailQueue) ReceiveMessage(request *emailservice.ReceiveMessageRequest, stream emailservice.EmailService_ReceiveMessageServer) error {
+func (e *EmailQueue) ListMessages(request *emailservice.AuthRequest, stream emailservice.EmailService_ListMessagesServer) error {
+	resp := new(emailservice.ReceiveMessage)
 
-	if request.MessageNumber > 0 {
-		stat := email.Stat{Key: request.Key, MessageNumber: int(request.MessageNumber)}
+	err := e.emailServ.ReceiveStat(func(stat email.Stat) error {
 
-		if err := e.receiveMessage(stat, stream); err != nil {
-			return err
-		}
-
-	} else {
-
-		err := e.emailServ.ReceiveStat(func(stat email.Stat) error {
-
-			if err := e.receiveMessage(stat, stream); err != nil {
-				return err
-			}
-
-			return nil
-		})
-
+		m, err := e.readMessage(stat)
 		if err != nil {
 			return err
 		}
-	}
 
-	return nil
-}
+		resp = m
 
-func (e *EmailQueue) receiveMessage(stat email.Stat, stream emailservice.EmailService_ReceiveMessageServer) error {
-	resp := new(emailservice.ReceiveMessageResponse)
+		stream.Send(resp)
 
-	info, err := e.emailServ.ReadMessage(stat.Key, stat.MessageNumber)
+		return nil
+	})
 
 	if err != nil {
 		return err
 	}
 
+	return nil
+}
+
+func (e *EmailQueue) Message(request *emailservice.MessageRequest, stream emailservice.EmailService_MessageServer) error {
+	resp := new(emailservice.ReceiveMessage)
+
+	stat := email.Stat{Key: request.AuthRequest.Key, MessageNumber: request.MessageNumber}
+
+	m, err := e.readMessage(stat)
+	if err != nil {
+		return err
+	}
+
+	resp = m
+
+	stream.Send(resp)
+
+	return nil
+}
+
+func (e *EmailQueue) readMessage(stat email.Stat) (*emailservice.ReceiveMessage, error) {
+	info, err := e.emailServ.ReadMessage(stat.Key, stat.MessageNumber)
+
+	if err != nil {
+		return &emailservice.ReceiveMessage{}, err
+	}
+
 	sender := info.Sender()
 
-	message := emailservice.ReceiveMessage{
+	message := &emailservice.ReceiveMessage{
 		Id: info.MessageId(),
 		Address: &emailservice.Address{
 			Name:    sender.Name,
@@ -70,11 +81,9 @@ func (e *EmailQueue) receiveMessage(stat email.Stat, stream emailservice.EmailSe
 		Subject: info.Subject(),
 	}
 
-	resp.ReceiveMessage = &message
-
 	files, err := info.Files()
 	if err != nil {
-		return err
+		return &emailservice.ReceiveMessage{}, err
 	}
 
 	for _, f := range files {
@@ -83,15 +92,11 @@ func (e *EmailQueue) receiveMessage(stat email.Stat, stream emailservice.EmailSe
 			Data: f.Data,
 		}
 
-		resp.ReceiveMessage.Files = append(resp.ReceiveMessage.Files, file)
+		message.Files = append(message.Files, file)
 
 	}
 
-	if err := stream.Send(resp); err != nil {
-		return err
-	}
-
-	return nil
+	return message, nil
 }
 
 func (e *EmailQueue) receiveStatList(fn email.ReceiveFunc) error {

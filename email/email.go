@@ -78,24 +78,25 @@ func (e *Email) Send(message *model.Message, file *model.File) error {
 func (e *Email) ReceiveStat(fn ReceiveFunc) error {
 	for _, c := range e.config {
 		client, err := e.client(c.Key)
-		defer client.Close()
 
 		if err != nil {
 			return err
 		}
 
+		defer client.Close()
+
 		if list, err := client.List(); err == nil {
 			for _, l := range list {
 				stat := strings.Split(l, " ")
 
-				msgnumber, err := strconv.Atoi(stat[0])
+				msgnumber, err := strconv.ParseInt(stat[0], 0, 64)
 				if err != nil {
-					msgnumber = 0
+					return err
 				}
 
-				msgid, err := strconv.Atoi(stat[1])
+				msgid, err := strconv.ParseInt(stat[1], 0, 64)
 				if err != nil {
-					msgid = 0
+					return err
 				}
 
 				fn(Stat{Key: c.Key, MessageNumber: msgnumber, ID: msgid})
@@ -107,21 +108,21 @@ func (e *Email) ReceiveStat(fn ReceiveFunc) error {
 	return nil
 }
 
-func (e *Email) ReadMessage(key string, number int) (*MessageInfo, error) {
+func (e *Email) ReadMessage(key string, number int64) (*MessageInfo, error) {
 	client, err := e.client(key)
-	defer client.Close()
 
 	if err != nil {
-		return &MessageInfo{}, err
+		return nil, err
 	}
 
-	r, err := client.Retr(number)
+	defer client.Close()
+
+	r, err := client.Retr(int(number))
 	if err != nil {
-		return &MessageInfo{}, err
+		return nil, err
 	}
 
 	return NewMessageInfo(r), nil
-
 }
 
 func (e *Email) send(config *Config, message *Message) error {
@@ -146,18 +147,18 @@ func (e *Email) send(config *Config, message *Message) error {
 func (e *Email) client(key string) (*pop3.Client, error) {
 	c, err := e.configByKey(key)
 	if err != nil {
-		return &pop3.Client{}, err
+		return nil, err
 	}
 
 	address := net.JoinHostPort(c.POP3.Hostname, fmt.Sprintf("%d", c.POP3.Port))
 	dial, err := pop3.Dial(address, c.POP3.Encryption)
 
 	if err != nil {
-		return &pop3.Client{}, err
+		return nil, err
 	}
 
 	if err := dial.Auth(c.Username, c.Password); err != nil {
-		return &pop3.Client{}, err
+		return nil, err
 	}
 
 	return dial, nil
