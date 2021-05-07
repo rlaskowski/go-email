@@ -1,8 +1,9 @@
 package grpc
 
 import (
-	"container/heap"
-	"errors"
+	"bytes"
+	"encoding/json"
+	"io"
 
 	"github.com/rlaskowski/go-email/email"
 	"github.com/rlaskowski/go-email/grpc/protobuf/emailservice"
@@ -22,68 +23,44 @@ func NewEmailQueue(queueFactory *queue.QueueFactory, emserv *email.Email) *Email
 	}
 }
 
-func (e *EmailQueue) ListMessages(request *emailservice.AuthRequest, stream emailservice.EmailService_ListMessagesServer) error {
-	resp := new(emailservice.ReceiveMessage)
-
-	err := e.emailServ.ReceiveStat(func(stat email.Stat) error {
-
-		m, err := e.readMessage(stat)
-		if err != nil {
-			return err
-		}
-
-		resp = m
-
-		stream.Send(resp)
-
-		return nil
-	})
-
+func (e *EmailQueue) MessageStat(request *emailservice.StatRequest, stream emailservice.EmailService_MessageStatServer) error {
+	stat, err := e.emailServ.Stat(request.Key)
 	if err != nil {
 		return err
+	}
+
+	response := &emailservice.Stat{}
+
+	for _, s := range stat {
+		response.MessageId = s.ID
+		response.MessageNumber = s.MessageNumber
+
+		stream.Send(response)
 	}
 
 	return nil
 }
 
-func (e *EmailQueue) Message(request *emailservice.MessageRequest, stream emailservice.EmailService_MessageServer) error {
-	resp := new(emailservice.ReceiveMessage)
-
-	stat := email.Stat{Key: request.AuthRequest.Key, MessageNumber: request.MessageNumber}
-
-	m, err := e.readMessage(stat)
+func (e *EmailQueue) ReceiveMessage(request *emailservice.IncomingMsgRequest, stream emailservice.EmailService_ReceiveMessageServer) error {
+	m, err := e.emailServ.ReadMessage(request.Key, request.MessageNumber)
 	if err != nil {
 		return err
 	}
 
-	resp = m
+	response := &emailservice.IncomingMsgResponse{}
 
-	stream.Send(resp)
-
-	return nil
-}
-
-func (e *EmailQueue) readMessage(stat email.Stat) (*emailservice.ReceiveMessage, error) {
-	info, err := e.emailServ.ReadMessage(stat.Key, stat.MessageNumber)
-
-	if err != nil {
-		return &emailservice.ReceiveMessage{}, err
-	}
-
-	sender := info.Sender()
-
-	message := &emailservice.ReceiveMessage{
-		Id: info.MessageId(),
+	incomingMesssage := &emailservice.IncomingMessage{
+		Id: m.MessageId(),
 		Address: &emailservice.Address{
-			Name:    sender.Name,
-			Address: sender.Address,
+			Name:    m.Sender().Name,
+			Address: m.Sender().Address,
 		},
-		Subject: info.Subject(),
+		Subject: m.Subject(),
 	}
 
-	files, err := info.Files()
+	files, err := m.Files()
 	if err != nil {
-		return &emailservice.ReceiveMessage{}, err
+		return err
 	}
 
 	for _, f := range files {
@@ -91,31 +68,35 @@ func (e *EmailQueue) readMessage(stat email.Stat) (*emailservice.ReceiveMessage,
 			Name: f.Name,
 			Data: f.Data,
 		}
-
-		message.Files = append(message.Files, file)
-
+		incomingMesssage.Files = append(incomingMesssage.Files, file)
 	}
 
-	return message, nil
-}
+	encode, err := json.Marshal(incomingMesssage)
+	if err != nil {
+		return err
+	}
 
-func (e *EmailQueue) receiveStatList(fn email.ReceiveFunc) error {
-	q := e.emailQueue()
+	b := make([]byte, 32*1024)
+	buff := bytes.NewBuffer(encode)
 
-	for q.Len() > 0 {
-		qs := heap.Pop(q).(*queue.QueueStore)
+	for {
+		n, err := buff.Read(b)
 
-		stat, ok := qs.Message.(email.Stat)
-		if !ok {
-			return errors.New("Could not convert Message to Stat")
+		if n > 0 {
+			response.Message = b[0:n]
 		}
 
-		fn(email.Stat{Key: stat.Key, MessageNumber: stat.MessageNumber, ID: stat.ID})
+		if err != nil {
+			if err != io.EOF {
+				return err
+			}
+			break
+		}
 
+		stream.Send(response)
 	}
 
 	return nil
-
 }
 
 func (e *EmailQueue) emailQueue() queue.QueueProcess {

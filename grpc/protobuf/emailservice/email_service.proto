@@ -4,11 +4,16 @@ option go_package = "grpc/protobuf/emailservice";
 
 package emailservice;
 
-message ReceiveMessage {
+message IncomingMessage {
     string id = 1;
     Address address  = 2;
     string subject = 3;
     repeated File files = 4;
+}
+
+message Stat {
+    int64 message_id = 1;
+    int64 message_number = 2;
 }
 
 message Address {
@@ -21,19 +26,23 @@ message File {
     bytes data = 2;
 }
 
-message AuthRequest {
+message StatRequest {
     string key = 1;
 }
 
-message MessageRequest {
-    AuthRequest authRequest = 1;
+message IncomingMsgRequest {
+    string key = 1;
     int64 message_number = 2;
+}
+
+message IncomingMsgResponse {
+    bytes message = 1;
 }
 
 
 service EmailService {
-    rpc ListMessages(AuthRequest) returns (stream ReceiveMessage) {}
-    rpc Message(MessageRequest) returns (stream ReceiveMessage) {}
+    rpc MessageStat(StatRequest) returns (stream Stat) {}
+    rpc ReceiveMessage(IncomingMsgRequest) returns (stream IncomingMsgResponse) {}
 }
 
 

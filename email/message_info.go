@@ -17,9 +17,8 @@ type MessageInfo struct {
 }
 
 type Stat struct {
-	Key           string `json:"access_key"`
-	MessageNumber int64  `json:"message_number"`
-	ID            int64  `json:"message_id"`
+	MessageNumber int64 `json:"message_number"`
+	ID            int64 `json:"message_id"`
 }
 
 type File struct {

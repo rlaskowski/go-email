@@ -2,9 +2,7 @@ package queue
 
 import (
 	"container/heap"
-	"time"
 
-	"github.com/rlaskowski/go-email/config"
 	"github.com/rlaskowski/go-email/email"
 )
 
@@ -37,8 +35,6 @@ func NewEmailQueue(email *email.Email) *EmailQueue {
 func (e *EmailQueue) Start() error {
 	heap.Init(e)
 
-	go e.start()
-
 	return nil
 }
 
@@ -57,7 +53,7 @@ func (e *EmailQueue) Pop() interface{} {
 	old := *&e.queue
 	n := len(old)
 	qstore := old[n-1]
-	old[n-1] = nil // avoid memory leak
+	//old[n-1] = nil
 	qstore.Index = -1
 	*&e.queue = old[0 : n-1]
 
@@ -78,29 +74,6 @@ func (e *EmailQueue) Swap(i, j int) {
 	e.queue[j].Index = j
 }
 
-func (e *EmailQueue) receive() error {
-	go func() {
-		e.email.ReceiveStat(func(info email.Stat) error {
-
-			if !e.findReceive(info) {
-				n := 0
-				qstore := &QueueStore{
-					Priority: 1,
-					Index:    n + 1,
-					Subject:  SubjectReceiving,
-					Message:  info,
-				}
-
-				heap.Push(e, qstore)
-			}
-
-			return nil
-		})
-	}()
-
-	return nil
-}
-
 func (e *EmailQueue) findReceive(info email.Stat) bool {
 	for _, i := range e.queue {
 		if i.Subject == SubjectReceiving {
@@ -110,16 +83,4 @@ func (e *EmailQueue) findReceive(info email.Stat) bool {
 		}
 	}
 	return false
-}
-
-func (e *EmailQueue) start() {
-
-	for {
-		if err := e.receive(); err != nil {
-
-		}
-
-		time.Sleep(config.QueueRefreshTime)
-	}
-
 }

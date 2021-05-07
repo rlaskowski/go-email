@@ -75,37 +75,44 @@ func (e *Email) Send(message *model.Message, file *model.File) error {
 	return e.send(c, m)
 }
 
-func (e *Email) ReceiveStat(fn ReceiveFunc) error {
-	for _, c := range e.config {
-		client, err := e.client(c.Key)
+func (e *Email) Stat(key string) ([]*Stat, error) {
+	client, err := e.client(key)
 
-		if err != nil {
-			return err
-		}
+	if err != nil {
+		return nil, err
+	}
 
-		defer client.Close()
+	defer client.Close()
 
-		if list, err := client.List(); err == nil {
-			for _, l := range list {
-				stat := strings.Split(l, " ")
+	statList := make([]*Stat, 0)
 
-				msgnumber, err := strconv.ParseInt(stat[0], 0, 64)
-				if err != nil {
-					return err
-				}
+	if list, err := client.List(); err == nil {
 
-				msgid, err := strconv.ParseInt(stat[1], 0, 64)
-				if err != nil {
-					return err
-				}
+		for _, l := range list {
+			m := strings.Split(l, " ")
 
-				fn(Stat{Key: c.Key, MessageNumber: msgnumber, ID: msgid})
+			msgnumber, err := strconv.ParseInt(m[0], 0, 64)
+			if err != nil {
+				return nil, err
 			}
+
+			msgid, err := strconv.ParseInt(m[1], 0, 64)
+			if err != nil {
+				return nil, err
+			}
+
+			stat := &Stat{
+				MessageNumber: msgnumber,
+				ID:            msgid,
+			}
+
+			statList = append(statList, stat)
 		}
 
 	}
 
-	return nil
+	return statList, nil
+
 }
 
 func (e *Email) ReadMessage(key string, number int64) (*MessageInfo, error) {
