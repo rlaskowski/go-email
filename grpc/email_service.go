@@ -56,6 +56,7 @@ func (e *EmailQueue) ReceiveMessage(request *emailservice.IncomingMsgRequest, st
 			Address: m.Sender().Address,
 		},
 		Subject: m.Subject(),
+		Date:    m.Date(),
 	}
 
 	files, err := m.Files()

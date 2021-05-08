@@ -4,11 +4,16 @@ import (
 	"bytes"
 	"encoding/base64"
 	"io"
+	"io/ioutil"
 	"mime"
 	"mime/multipart"
 	"net/mail"
 	"net/textproto"
 	"strings"
+	"time"
+
+	"github.com/paulrosania/go-charset/charset"
+	_ "github.com/paulrosania/go-charset/data"
 )
 
 type MessageInfo struct {
@@ -62,8 +67,24 @@ func (m *MessageInfo) Sender() *mail.Address {
 	return address
 }
 
+func (m *MessageInfo) Date() string {
+	hdt, err := m.message.Header.Date()
+	if err != nil {
+		hdt = time.Now()
+	}
+
+	return hdt.Format(time.RFC3339Nano)
+}
+
 func (m *MessageInfo) Subject() string {
-	return m.message.Header.Get("Subject")
+	s := m.message.Header.Get("Subject")
+
+	dec, err := m.decode(s)
+	if err != nil {
+		return s
+	}
+
+	return dec
 }
 
 func (m *MessageInfo) MessageId() string {
@@ -117,4 +138,38 @@ func (m *MessageInfo) decodeFile(part *multipart.Part) ([]byte, error) {
 	}
 
 	return b.Bytes(), nil
+}
+
+func (m *MessageInfo) decode(encoded string) (string, error) {
+	wd := new(mime.WordDecoder)
+
+	wd.CharsetReader = func(charset string, input io.Reader) (io.Reader, error) {
+
+		if !strings.Contains(charset, "utf-8") {
+			c, err := m.decodeCharset(charset, input)
+			if err != nil {
+				return nil, err
+			}
+
+			return bytes.NewReader(c), nil
+		}
+
+		return input, nil
+	}
+
+	return wd.Decode(encoded)
+}
+
+func (m *MessageInfo) decodeCharset(ch string, r io.Reader) ([]byte, error) {
+	r, err := charset.NewReader(ch, r)
+	if err != nil {
+		return nil, err
+	}
+
+	c, err := ioutil.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+
+	return c, nil
 }

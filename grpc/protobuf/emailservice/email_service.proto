@@ -8,7 +8,8 @@ message IncomingMessage {
     string id = 1;
     Address address  = 2;
     string subject = 3;
-    repeated File files = 4;
+    string date = 4;
+    repeated File files = 5;
 }
 
 message Stat {
