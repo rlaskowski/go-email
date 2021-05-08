@@ -22,8 +22,9 @@ type MessageInfo struct {
 }
 
 type Stat struct {
-	MessageNumber int64 `json:"message_number"`
-	ID            int64 `json:"message_id"`
+	Key           string `json:"key"`
+	MessageNumber int64  `json:"message_number"`
+	ID            int64  `json:"message_id"`
 }
 
 type File struct {
@@ -120,7 +121,12 @@ func (m *MessageInfo) Files() ([]File, error) {
 					return nil, err
 				}
 
-				files = append(files, File{Name: part.FileName(), Data: filedata})
+				filename, err := m.decode(part.FileName())
+				if err != nil {
+					filename = part.FileName()
+				}
+
+				files = append(files, File{Name: filename, Data: filedata})
 			}
 
 		}

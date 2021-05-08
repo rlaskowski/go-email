@@ -32,6 +32,7 @@ func (e *EmailQueue) MessageStat(request *emailservice.StatRequest, stream email
 	response := &emailservice.Stat{}
 
 	for _, s := range stat {
+		response.Key = s.Key
 		response.MessageId = s.ID
 		response.MessageNumber = s.MessageNumber
 
@@ -57,6 +58,7 @@ func (e *EmailQueue) ReceiveMessage(request *emailservice.IncomingMsgRequest, st
 		},
 		Subject: m.Subject(),
 		Date:    m.Date(),
+		Content: "",
 	}
 
 	files, err := m.Files()
@@ -97,6 +99,26 @@ func (e *EmailQueue) ReceiveMessage(request *emailservice.IncomingMsgRequest, st
 		stream.Send(response)
 	}
 
+	return nil
+}
+
+func (e *EmailQueue) RouteMessage(stream emailservice.EmailService_RouteMessageServer) error {
+	/* statlist := make(map[int64]*email.Stat)
+
+	for {
+		statin, err := stream.Recv()
+
+		if err != nil {
+			if err != io.EOF {
+				return err
+			}
+			return nil
+		}
+
+
+
+
+	} */
 	return nil
 }
 

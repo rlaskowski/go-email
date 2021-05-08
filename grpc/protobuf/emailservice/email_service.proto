@@ -9,12 +9,14 @@ message IncomingMessage {
     Address address  = 2;
     string subject = 3;
     string date = 4;
-    repeated File files = 5;
+    string content = 5;
+    repeated File files = 6;
 }
 
 message Stat {
-    int64 message_id = 1;
-    int64 message_number = 2;
+    string key = 1;
+    int64 message_id = 2;
+    int64 message_number = 3;
 }
 
 message Address {
@@ -44,6 +46,7 @@ message IncomingMsgResponse {
 service EmailService {
     rpc MessageStat(StatRequest) returns (stream Stat) {}
     rpc ReceiveMessage(IncomingMsgRequest) returns (stream IncomingMsgResponse) {}
+    rpc RouteMessage(stream Stat) returns (stream IncomingMsgResponse) {}
 }
 
 

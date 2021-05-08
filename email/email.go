@@ -102,6 +102,7 @@ func (e *Email) Stat(key string) ([]*Stat, error) {
 			}
 
 			stat := &Stat{
+				Key:           key,
 				MessageNumber: msgnumber,
 				ID:            msgid,
 			}
