@@ -60,9 +60,17 @@ func newMessageInfo(reader textproto.Reader) *MessageInfo {
 func (m *MessageInfo) Sender() *mail.Address {
 	from := m.message.Header.Get("From")
 
+	d, err := m.decode(from)
+	if err == nil {
+		from = d
+	}
+
 	address, err := mail.ParseAddress(from)
 	if err != nil {
-		return nil
+		return &mail.Address{
+			Name:    "",
+			Address: from,
+		}
 	}
 
 	return address
@@ -150,7 +158,6 @@ func (m *MessageInfo) decode(encoded string) (string, error) {
 	wd := new(mime.WordDecoder)
 
 	wd.CharsetReader = func(charset string, input io.Reader) (io.Reader, error) {
-
 		if !strings.Contains(charset, "utf-8") {
 			c, err := m.decodeCharset(charset, input)
 			if err != nil {
@@ -163,7 +170,8 @@ func (m *MessageInfo) decode(encoded string) (string, error) {
 		return input, nil
 	}
 
-	return wd.Decode(encoded)
+	return wd.DecodeHeader(encoded)
+
 }
 
 func (m *MessageInfo) decodeCharset(ch string, r io.Reader) ([]byte, error) {
