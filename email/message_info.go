@@ -68,7 +68,7 @@ func (m *MessageInfo) Sender() *mail.Address {
 	address, err := mail.ParseAddress(from)
 	if err != nil {
 		return &mail.Address{
-			Name:    "",
+			Name:    from,
 			Address: from,
 		}
 	}
