@@ -7,7 +7,7 @@ import (
 	"net"
 
 	"github.com/rlaskowski/go-email/config"
-	"github.com/rlaskowski/go-email/grpc/protobuf/emailqueue"
+	"github.com/rlaskowski/go-email/grpc/protobuf/emailservice"
 	"github.com/rlaskowski/go-email/registries"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -36,7 +36,7 @@ func NewGrpcServer(registries *registries.Registries) *GrpcServer {
 func (g *GrpcServer) configureGrpc() {
 	reflection.Register(g.grpc)
 
-	emailqueue.RegisterEmailServiceServer(g.grpc, g.registries.GrpcEmailQueue)
+	emailservice.RegisterEmailServiceServer(g.grpc, g.registries.GrpcEmailQueue)
 }
 
 func (g *GrpcServer) Start() error {

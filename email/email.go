@@ -9,6 +9,7 @@ import (
 	"net/mail"
 	"net/smtp"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -45,7 +46,7 @@ func (e *Email) Stop() error {
 }
 
 func (e *Email) configure() error {
-	config, err := loadConfig()
+	config, err := e.loadConfig()
 	if err != nil {
 		return err
 	}
@@ -74,53 +75,62 @@ func (e *Email) Send(message *model.Message, file *model.File) error {
 	return e.send(c, m)
 }
 
-func (e *Email) Receive(fn ReceiveFunc) error {
-	for _, c := range e.config {
-		client, err := e.client(c.Key)
-		defer client.Close()
+func (e *Email) Stat(key string) ([]*Stat, error) {
+	client, err := e.client(key)
 
-		if err != nil {
-			return err
-		}
-
-		if list, err := client.List(); err == nil {
-			for _, l := range list {
-				stat := strings.Split(l, " ")
-
-				msgnumber, err := strconv.Atoi(stat[0])
-				if err != nil {
-					msgnumber = 0
-				}
-
-				msgid, err := strconv.Atoi(stat[1])
-				if err != nil {
-					msgid = 0
-				}
-
-				fn(Stat{Key: c.Key, MessageNumber: msgnumber, ID: msgid})
-			}
-		}
-
+	if err != nil {
+		return nil, err
 	}
 
-	return nil
-}
-
-func (e *Email) ReadMessage(key string, number int) (*MessageInfo, error) {
-	client, err := e.client(key)
 	defer client.Close()
 
-	if err != nil {
-		return &MessageInfo{}, err
+	statList := make([]*Stat, 0)
+
+	if list, err := client.List(); err == nil {
+
+		for _, l := range list {
+			m := strings.Split(l, " ")
+
+			msgnumber, err := strconv.ParseInt(m[0], 0, 64)
+			if err != nil {
+				return nil, err
+			}
+
+			msgid, err := strconv.ParseInt(m[1], 0, 64)
+			if err != nil {
+				return nil, err
+			}
+
+			stat := &Stat{
+				Key:           key,
+				MessageNumber: msgnumber,
+				ID:            msgid,
+			}
+
+			statList = append(statList, stat)
+		}
+
 	}
 
-	r, err := client.Retr(number)
+	return statList, nil
+
+}
+
+func (e *Email) ReadMessage(key string, number int64) (*MessageInfo, error) {
+	client, err := e.client(key)
+
 	if err != nil {
-		return &MessageInfo{}, err
+		return nil, err
+	}
+
+	defer client.Close()
+
+	r, err := client.Retr(int(number))
+	if err != nil {
+		return nil, err
 	}
 
 	return NewMessageInfo(r), nil
-
 }
 
 func (e *Email) send(config *Config, message *Message) error {
@@ -145,28 +155,28 @@ func (e *Email) send(config *Config, message *Message) error {
 func (e *Email) client(key string) (*pop3.Client, error) {
 	c, err := e.configByKey(key)
 	if err != nil {
-		return &pop3.Client{}, err
+		return nil, err
 	}
 
 	address := net.JoinHostPort(c.POP3.Hostname, fmt.Sprintf("%d", c.POP3.Port))
 	dial, err := pop3.Dial(address, c.POP3.Encryption)
 
 	if err != nil {
-		return &pop3.Client{}, err
+		return nil, err
 	}
 
 	if err := dial.Auth(c.Username, c.Password); err != nil {
-		return &pop3.Client{}, err
+		return nil, err
 	}
 
 	return dial, nil
 
 }
 
-func loadConfig() ([]*Config, error) {
+func (e *Email) loadConfig() ([]*Config, error) {
 	var configList []*Config
 
-	path := fmt.Sprintf("%s/config.yaml", config.GetWorkingDirectory())
+	path := filepath.Join(config.GetWorkingDirectory(), "config.yaml")
 
 	file, err := os.Open(path)
 	defer file.Close()

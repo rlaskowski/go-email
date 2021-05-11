@@ -13,7 +13,7 @@ const (
 var (
 	FileStorePath          = GetWorkingDirectory()
 	FileStore              = false
-	HttpServerPort         = 8080
+	HttpServerPort         = 8181
 	HttpServerReadTimeout  = 30 * time.Second
 	HttpServerWriteTimeout = 30 * time.Second
 	HttpMaxHeaderSize      = 1024 * 4
