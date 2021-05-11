@@ -104,16 +104,16 @@ func (c *Client) Delete(number int) error {
 	return nil
 }
 
-func (c *Client) Retr(number int) (textproto.Reader, error) {
+func (c *Client) Retr(number int) (*textproto.Reader, error) {
 	if _, err := c.cmd("RETR %d", number); err != nil {
-		return textproto.Reader{}, err
+		return nil, err
 	}
 
 	if _, err := readResponse(c.text); err != nil {
-		return textproto.Reader{}, err
+		return nil, err
 	}
 
-	return c.text.Reader, nil
+	return &c.text.Reader, nil
 }
 
 func (c *Client) Stat() (string, error) {

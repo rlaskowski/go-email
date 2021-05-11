@@ -3,6 +3,7 @@ package email
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -17,7 +18,7 @@ import (
 )
 
 type MessageInfo struct {
-	reader  textproto.Reader
+	reader  *textproto.Reader
 	message *mail.Message
 }
 
@@ -32,11 +33,11 @@ type File struct {
 	Data []byte `json:"data"`
 }
 
-func NewMessageInfo(reader textproto.Reader) *MessageInfo {
+func NewMessageInfo(reader *textproto.Reader) *MessageInfo {
 	return newMessageInfo(reader)
 }
 
-func newMessageInfo(reader textproto.Reader) *MessageInfo {
+func newMessageInfo(reader *textproto.Reader) *MessageInfo {
 	line, err := reader.ReadDotBytes()
 	if err != nil {
 		return nil
@@ -104,6 +105,41 @@ func (m *MessageInfo) MessageId() string {
 func (m *MessageInfo) Files() ([]File, error) {
 	files := make([]File, 0)
 
+	reader, err := m.bodyReader()
+	if err != nil {
+		return nil, err
+	}
+
+	for {
+		part, err := reader.NextPart()
+		if err != nil {
+			if err != io.EOF {
+				return nil, err
+			}
+			break
+		}
+
+		if len(part.FileName()) > 0 {
+			filedata, err := m.decodeFile(part)
+			if err != nil {
+				return nil, err
+			}
+
+			filename, err := m.decode(part.FileName())
+			if err != nil {
+				filename = part.FileName()
+			}
+
+			files = append(files, File{Name: filename, Data: filedata})
+		}
+
+	}
+
+	return files, nil
+
+}
+
+func (m *MessageInfo) bodyReader() (*multipart.Reader, error) {
 	ct := m.message.Header.Get("Content-Type")
 
 	mediatype, params, err := mime.ParseMediaType(ct)
@@ -111,36 +147,13 @@ func (m *MessageInfo) Files() ([]File, error) {
 		return nil, err
 	}
 
-	if strings.HasPrefix(mediatype, "multipart") {
-		reader := multipart.NewReader(m.message.Body, params["boundary"])
-
-		for {
-			part, err := reader.NextPart()
-			if err != nil {
-				if err != io.EOF {
-					return nil, err
-				}
-				break
-			}
-
-			if len(part.FileName()) > 0 {
-				filedata, err := m.decodeFile(part)
-				if err != nil {
-					return nil, err
-				}
-
-				filename, err := m.decode(part.FileName())
-				if err != nil {
-					filename = part.FileName()
-				}
-
-				files = append(files, File{Name: filename, Data: filedata})
-			}
-
-		}
+	if !strings.HasPrefix(mediatype, "multipart") {
+		return nil, errors.New("No multipart in body")
 	}
 
-	return files, nil
+	reader := multipart.NewReader(m.message.Body, params["boundary"])
+
+	return reader, nil
 }
 
 func (m *MessageInfo) decodeFile(part *multipart.Part) ([]byte, error) {
