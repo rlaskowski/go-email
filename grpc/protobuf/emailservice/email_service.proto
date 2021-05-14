@@ -9,7 +9,7 @@ message IncomingMessage {
     Address address  = 2;
     string subject = 3;
     string date = 4;
-    string content = 5;
+    repeated Content contents = 5;
     repeated File files = 6;
 }
 
@@ -22,6 +22,11 @@ message Stat {
 message Address {
     string name = 1;
     string address = 2;
+}
+
+message Content {
+    bool HtmlType = 1;
+    bytes data = 2;
 }
 
 message File {

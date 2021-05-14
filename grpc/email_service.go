@@ -3,6 +3,7 @@ package grpc
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 
 	"github.com/rlaskowski/go-email/email"
@@ -48,6 +49,10 @@ func (e *EmailQueue) ReceiveMessage(request *emailservice.IncomingMsgRequest, st
 		return err
 	}
 
+	if err := m.ParseBody(); err != nil {
+		return errors.New("Body parser error")
+	}
+
 	response := &emailservice.IncomingMsgResponse{}
 
 	incomingMesssage := &emailservice.IncomingMessage{
@@ -58,15 +63,17 @@ func (e *EmailQueue) ReceiveMessage(request *emailservice.IncomingMsgRequest, st
 		},
 		Subject: m.Subject(),
 		Date:    m.Date(),
-		Content: "",
 	}
 
-	files, err := m.Files()
-	if err != nil {
-		return err
+	for _, c := range m.Contents() {
+		content := &emailservice.Content{
+			HtmlType: c.HtmlType,
+			Data:     c.Data,
+		}
+		incomingMesssage.Contents = append(incomingMesssage.Contents, content)
 	}
 
-	for _, f := range files {
+	for _, f := range m.Files() {
 		file := &emailservice.File{
 			Name: f.Name,
 			Data: f.Data,
