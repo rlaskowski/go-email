@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -169,22 +170,28 @@ func (m *MessageInfo) writeContent(part *multipart.Part) error {
 			break
 		}
 
-		ct = part.Header.Get("Content-Type")
+		ctp := part.Header.Get("Content-Type")
 
-		mediatype, _, err := mime.ParseMediaType(ct)
+		mediatype, params, err := mime.ParseMediaType(ctp)
 		if err != nil {
 			return nil
 		}
 
-		c := &Content{}
+		charset := params["charset"]
+		fmt.Println(charset)
 
-		if strings.Contains(mediatype, "text/html") {
-			c.HtmlType = true
-		}
+		c := &Content{}
 
 		dec, err := m.decodePart(part)
 		if err != nil {
 			return err
+		}
+
+		if strings.Contains(mediatype, "text/html") {
+			c.HtmlType = true
+		} else {
+			r := bytes.NewReader(dec)
+			dec, err = m.decodeCharset(strings.ToLower(charset), r)
 		}
 
 		c.Data = dec
@@ -197,26 +204,28 @@ func (m *MessageInfo) writeContent(part *multipart.Part) error {
 }
 
 func (m *MessageInfo) writeFile(part *multipart.Part) error {
-	if len(part.FileName()) > 0 {
-		m.files = make([]*File, 0)
-
-		filedata, err := m.decodePart(part)
-		if err != nil {
-			return err
-		}
-
-		filename, err := m.decode(part.FileName())
-		if err != nil {
-			filename = part.FileName()
-		}
-
-		file := &File{
-			Name: filename,
-			Data: filedata,
-		}
-
-		m.files = append(m.files, file)
+	if !(len(part.FileName()) > 0) {
+		return nil
 	}
+
+	m.files = make([]*File, 0)
+
+	filedata, err := m.decodePart(part)
+	if err != nil {
+		return err
+	}
+
+	filename, err := m.decode(part.FileName())
+	if err != nil {
+		filename = part.FileName()
+	}
+
+	file := &File{
+		Name: filename,
+		Data: filedata,
+	}
+
+	m.files = append(m.files, file)
 
 	return nil
 
