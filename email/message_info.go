@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -37,7 +36,7 @@ type File struct {
 }
 
 type Content struct {
-	HtmlType bool   `json:"html"`
+	HtmlType bool   `json:"html_type"`
 	Data     []byte `json:"data"`
 }
 
@@ -59,8 +58,10 @@ func newMessageInfo(reader *textproto.Reader) *MessageInfo {
 	}
 
 	m := &MessageInfo{
-		reader:  reader,
-		message: message,
+		reader:   reader,
+		message:  message,
+		files:    make([]*File, 0),
+		contents: make([]*Content, 0),
 	}
 
 	return m
@@ -152,13 +153,11 @@ func (m *MessageInfo) writeContent(part *multipart.Part) error {
 		return nil
 	}
 
-	m.contents = make([]*Content, 0)
-
 	ct := part.Header.Get("Content-Type")
 
 	reader, err := m.bodyReader(part, ct)
 	if err != nil {
-		return nil
+		return m.putContent(part)
 	}
 
 	for {
@@ -170,35 +169,48 @@ func (m *MessageInfo) writeContent(part *multipart.Part) error {
 			break
 		}
 
-		ctp := part.Header.Get("Content-Type")
-
-		mediatype, params, err := mime.ParseMediaType(ctp)
-		if err != nil {
+		if err := m.putContent(part); err != nil {
 			return nil
 		}
 
-		charset := params["charset"]
-		fmt.Println(charset)
+	}
 
-		c := &Content{}
+	return nil
+}
 
-		dec, err := m.decodePart(part)
+func (m *MessageInfo) putContent(part *multipart.Part) error {
+	ctp := part.Header.Get("Content-Type")
+
+	mediatype, params, err := mime.ParseMediaType(ctp)
+	if err != nil {
+		return nil
+	}
+
+	charset := params["charset"]
+
+	c := &Content{}
+
+	dec, err := m.decodePart(part)
+	if err != nil {
+		return err
+	}
+
+	if strings.Contains(mediatype, "text/html") {
+		c.HtmlType = true
+	} else {
+
+		r := bytes.NewReader(dec)
+
+		dec, err = m.decodeCharset(strings.ToLower(charset), r)
 		if err != nil {
 			return err
 		}
 
-		if strings.Contains(mediatype, "text/html") {
-			c.HtmlType = true
-		} else {
-			r := bytes.NewReader(dec)
-			dec, err = m.decodeCharset(strings.ToLower(charset), r)
-		}
-
-		c.Data = dec
-
-		m.contents = append(m.contents, c)
-
 	}
+
+	c.Data = dec
+
+	m.contents = append(m.contents, c)
 
 	return nil
 }
@@ -207,8 +219,6 @@ func (m *MessageInfo) writeFile(part *multipart.Part) error {
 	if !(len(part.FileName()) > 0) {
 		return nil
 	}
-
-	m.files = make([]*File, 0)
 
 	filedata, err := m.decodePart(part)
 	if err != nil {
@@ -229,6 +239,13 @@ func (m *MessageInfo) writeFile(part *multipart.Part) error {
 
 	return nil
 
+}
+
+func (m *MessageInfo) isMultipart(mediatype string) bool {
+	if !strings.HasPrefix(mediatype, "multipart") {
+		return false
+	}
+	return true
 }
 
 func (m *MessageInfo) bodyReader(r io.Reader, v string) (*multipart.Reader, error) {
