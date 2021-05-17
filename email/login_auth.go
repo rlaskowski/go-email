@@ -5,19 +5,19 @@ import (
 	"net/smtp"
 )
 
-type authLogin struct {
+type loginAuth struct {
 	username, password string
 }
 
-func AuthLoginAuth(username, password string) *authLogin {
-	return &authLogin{username, password}
+func LoginAuth(username, password string) *loginAuth {
+	return &loginAuth{username, password}
 }
 
-func (a *authLogin) Start(server *smtp.ServerInfo) (proto string, toServer []byte, err error) {
+func (a *loginAuth) Start(server *smtp.ServerInfo) (proto string, toServer []byte, err error) {
 	return "LOGIN", []byte(a.username), nil
 }
 
-func (a *authLogin) Next(fromServer []byte, more bool) (toServer []byte, err error) {
+func (a *loginAuth) Next(fromServer []byte, more bool) (toServer []byte, err error) {
 	if more {
 		switch string(fromServer) {
 		case "Username:":

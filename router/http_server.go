@@ -12,8 +12,6 @@ import (
 	"github.com/bmizerany/pat"
 	"github.com/rlaskowski/go-email/config"
 	"github.com/rlaskowski/go-email/controller"
-	"github.com/rlaskowski/go-email/model"
-	"github.com/rlaskowski/go-email/queue"
 	"github.com/rlaskowski/go-email/registries"
 )
 
@@ -61,7 +59,7 @@ func (h *HttpServer) Start() error {
 	go func() {
 		h.configureEndpoints()
 
-		log.Printf("Starting REST API on http://localhost:%d", config.HttpServerPort)
+		log.Printf("Starting REST API on %d port", config.HttpServerPort)
 
 		if err := h.server.ListenAndServe(); err != nil {
 			log.Fatalf("Caught error while starting server: %s", err.Error())
@@ -80,8 +78,9 @@ func (h *HttpServer) Stop() error {
 }
 
 func (h *HttpServer) configureEndpoints() {
-	h.Post("/send/file", h.SendWithFile)
+	h.Post("/file/send", h.SendWithFile)
 	h.Post("/send", h.Send)
+	h.Get("/receive/list", h.ReceiveList)
 }
 
 func (h *HttpServer) Get(path string, handler http.HandlerFunc) {
@@ -96,8 +95,20 @@ func (h *HttpServer) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	h.router.ServeHTTP(rw, r)
 }
 
+func (h *HttpServer) ReceiveList(rw http.ResponseWriter, r *http.Request) {
+	/* que, err := h.registries.QueueFactory.GetOrCreate(queue.EmailQueueType)
+	if err != nil {
+		rw.WriteHeader(http.StatusBadRequest)
+		rw.Write([]byte(err.Error()))
+		return
+	}
+
+	list, _ := que.Subscribe(queue.SubjectReceiving)
+	h.json(rw, list) */
+}
+
 func (h *HttpServer) SendWithFile(rw http.ResponseWriter, r *http.Request) {
-	var result error
+	/*var result error
 
 	multipartReader, err := r.MultipartReader()
 	if err != nil {
@@ -122,14 +133,14 @@ func (h *HttpServer) SendWithFile(rw http.ResponseWriter, r *http.Request) {
 		rw.Write([]byte(err.Error()))
 	}
 
-	queue, err := h.registries.QueueFactory.GetOrCreate(queue.EmailQueueType)
+	que, err := h.registries.QueueFactory.GetOrCreate(queue.EmailQueueType)
 	if err != nil {
 		rw.WriteHeader(http.StatusBadRequest)
 		rw.Write([]byte(err.Error()))
 		return
 	}
 
-	if err := queue.Publish(message, file); err != nil {
+	 if err := que.Publish(queue.SubjectSending, message, file); err != nil {
 		rw.WriteHeader(http.StatusBadRequest)
 		rw.Write([]byte(err.Error()))
 		return
@@ -143,12 +154,12 @@ func (h *HttpServer) SendWithFile(rw http.ResponseWriter, r *http.Request) {
 			"result": "Message published successfully",
 		})
 		rw.WriteHeader(http.StatusOK)
-	}
+	}*/
 
 }
 
 func (h *HttpServer) Send(rw http.ResponseWriter, r *http.Request) {
-	var result error
+	/*var result error
 
 	messageForm := r.FormValue("message")
 
@@ -158,12 +169,12 @@ func (h *HttpServer) Send(rw http.ResponseWriter, r *http.Request) {
 		result = h.multiFailure(err.Error())
 	}
 
-	queue, err := h.registries.QueueFactory.GetOrCreate(queue.EmailQueueType)
+	 que, err := h.registries.QueueFactory.GetOrCreate(queue.EmailQueueType)
 	if err != nil {
 		result = h.multiFailure(err.Error())
 	}
 
-	if err := queue.Publish(message); err != nil {
+	if err := que.Publish(queue.SubjectSending, message); err != nil {
 		result = h.multiFailure(err.Error())
 	}
 
@@ -175,7 +186,7 @@ func (h *HttpServer) Send(rw http.ResponseWriter, r *http.Request) {
 			"result": "Message published successfully",
 		})
 		rw.WriteHeader(http.StatusOK)
-	}
+	}*/
 
 }
 
