@@ -299,7 +299,6 @@ func (m *MessageInfo) decode(encoded string) (string, error) {
 	}
 
 	return wd.DecodeHeader(encoded)
-
 }
 
 func (m *MessageInfo) decodeCharset(ch string, r io.Reader) ([]byte, error) {
