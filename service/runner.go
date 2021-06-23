@@ -35,7 +35,7 @@ func New() *Service {
 }
 
 func (s *Service) Start() error {
-	log.Printf("Email http service working in directory %s with pid %d", config.GetExecutableDirectory(), os.Getpid())
+	log.Printf("Email http service working in directory %s with pid %d", config.GetWorkingDirectory(), os.Getpid())
 	log.Printf("Path to store temporary file before send: %s", config.FileStorePath)
 
 	if err := s.http.Start(); err != nil {

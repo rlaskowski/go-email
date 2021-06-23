@@ -35,7 +35,7 @@ message File {
 }
 
 message StatRequest {
-    string key = 1;
+    string key = 1; 
 }
 
 message IncomingMsgRequest {

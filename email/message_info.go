@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"io"
-	"io/ioutil"
 	"mime"
 	"mime/multipart"
 	"net/mail"
@@ -13,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/paulrosania/go-charset/charset"
 	_ "github.com/paulrosania/go-charset/data"
 )
 
@@ -70,7 +68,7 @@ func newMessageInfo(reader *textproto.Reader) *MessageInfo {
 func (m *MessageInfo) Sender() *mail.Address {
 	from := m.message.Header.Get("From")
 
-	d, err := m.decode(from)
+	d, err := decode(from)
 	if err == nil {
 		from = d
 	}
@@ -98,7 +96,7 @@ func (m *MessageInfo) Date() string {
 func (m *MessageInfo) Subject() string {
 	s := m.message.Header.Get("Subject")
 
-	dec, err := m.decode(s)
+	dec, err := decode(s)
 	if err != nil {
 		return s
 	}
@@ -201,7 +199,7 @@ func (m *MessageInfo) putContent(part *multipart.Part) error {
 
 		r := bytes.NewReader(dec)
 
-		dec, err = m.decodeCharset(strings.ToLower(charset), r)
+		dec, err = decodeCharset(strings.ToLower(charset), r)
 		if err != nil {
 			return err
 		}
@@ -225,7 +223,7 @@ func (m *MessageInfo) writeFile(part *multipart.Part) error {
 		return err
 	}
 
-	filename, err := m.decode(part.FileName())
+	filename, err := decode(part.FileName())
 	if err != nil {
 		filename = part.FileName()
 	}
@@ -280,37 +278,4 @@ func (m *MessageInfo) decodePart(part *multipart.Part) ([]byte, error) {
 	}
 
 	return b.Bytes(), nil
-}
-
-func (m *MessageInfo) decode(encoded string) (string, error) {
-	wd := new(mime.WordDecoder)
-
-	wd.CharsetReader = func(charset string, input io.Reader) (io.Reader, error) {
-		if !strings.Contains(charset, "utf-8") {
-			c, err := m.decodeCharset(charset, input)
-			if err != nil {
-				return nil, err
-			}
-
-			return bytes.NewReader(c), nil
-		}
-
-		return input, nil
-	}
-
-	return wd.DecodeHeader(encoded)
-}
-
-func (m *MessageInfo) decodeCharset(ch string, r io.Reader) ([]byte, error) {
-	r, err := charset.NewReader(ch, r)
-	if err != nil {
-		return nil, err
-	}
-
-	c, err := ioutil.ReadAll(r)
-	if err != nil {
-		return nil, err
-	}
-
-	return c, nil
 }

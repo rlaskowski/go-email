@@ -57,7 +57,7 @@ func (e *Email) configure() error {
 }
 
 //Sending email
-func (e *Email) Send(message *model.Message, file *model.File) error {
+func (e *Email) Send(message *model.Message, file *File) error {
 	c, err := e.configByKey(message.Key)
 	if err != nil {
 		return fmt.Errorf("Could not load email config file due to: %s", err)
@@ -65,10 +65,10 @@ func (e *Email) Send(message *model.Message, file *model.File) error {
 
 	m := NewMessage()
 
-	m.AddSender(message.Sender, c.Email)
+	m.SetSender(message.Sender, c.Email)
 	m.AddRecipient(message.Recipient)
-	m.AddSubject(message.Subject)
-	m.AddContent(message.Content)
+	m.SetSubject(message.Subject)
+	//m.AddContent(message.Content)
 
 	m.AttachFile(file)
 
@@ -136,12 +136,19 @@ func (e *Email) ReadMessage(key string, number int64) (*MessageInfo, error) {
 func (e *Email) send(config *Config, message *Message) error {
 	auth := e.smtp.LoginAuth(config)
 
-	sender, err := mail.ParseAddress(message.Values(HeaderKeySender)[0])
+	sender, err := mail.ParseAddress(message.Sender())
 	if err != nil {
 		return err
 	}
 
-	err = smtp.SendMail(fmt.Sprintf("%s:%d", config.SMTP.Hostname, config.SMTP.Port), auth, sender.Address, message.Values(HeaderKeyRecipient), message.Bytes())
+	recipients := strings.Split(message.Recipients(), ",")
+
+	msg, err := message.Bytes()
+	if err != nil {
+		return err
+	}
+
+	err = smtp.SendMail(fmt.Sprintf("%s:%d", config.SMTP.Hostname, config.SMTP.Port), auth, sender.Address, recipients, msg)
 	if err != nil {
 		log.Printf("Error when try to send email due to: %s, client key %s", err, config.Key)
 		return err
