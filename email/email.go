@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
-	"net/mail"
 	"net/smtp"
 	"os"
 	"path/filepath"
@@ -16,7 +15,6 @@ import (
 
 	"github.com/rlaskowski/go-email/config"
 	"github.com/rlaskowski/go-email/email/pop3"
-	"github.com/rlaskowski/go-email/model"
 	"github.com/rlaskowski/go-email/serialization"
 )
 
@@ -57,22 +55,16 @@ func (e *Email) configure() error {
 }
 
 //Sending email
-func (e *Email) Send(message *model.Message, file *File) error {
-	c, err := e.configByKey(message.Key)
+func (e *Email) Send(key string, msg *Message) error {
+	c, err := e.configByKey(key)
 	if err != nil {
 		return fmt.Errorf("Could not load email config file due to: %s", err)
 	}
 
-	m := NewMessage()
+	sn := msg.SenderName()
+	msg.SetSender(sn, c.Email)
 
-	m.SetSender(message.Sender, c.Email)
-	m.AddRecipient(message.Recipient)
-	m.SetSubject(message.Subject)
-	//m.AddContent(message.Content)
-
-	m.AttachFile(file)
-
-	return e.send(c, m)
+	return e.send(c, msg)
 }
 
 func (e *Email) Stat(key string) ([]*Stat, error) {
@@ -133,28 +125,23 @@ func (e *Email) ReadMessage(key string, number int64) (*MessageInfo, error) {
 	return NewMessageInfo(r), nil
 }
 
-func (e *Email) send(config *Config, message *Message) error {
+func (e *Email) send(config *Config, msg *Message) error {
 	auth := e.smtp.LoginAuth(config)
 
-	sender, err := mail.ParseAddress(message.Sender())
+	recipients := strings.Split(msg.Recipients(), ",")
+
+	mb, err := msg.Bytes()
 	if err != nil {
 		return err
 	}
 
-	recipients := strings.Split(message.Recipients(), ",")
-
-	msg, err := message.Bytes()
-	if err != nil {
-		return err
-	}
-
-	err = smtp.SendMail(fmt.Sprintf("%s:%d", config.SMTP.Hostname, config.SMTP.Port), auth, sender.Address, recipients, msg)
+	err = smtp.SendMail(fmt.Sprintf("%s:%d", config.SMTP.Hostname, config.SMTP.Port), auth, msg.SenderAddress(), recipients, mb)
 	if err != nil {
 		log.Printf("Error when try to send email due to: %s, client key %s", err, config.Key)
 		return err
 	}
 
-	log.Printf("Email was sended successful to %s, client key %s", message.Recipients(), config.Key)
+	log.Printf("Email was sended successful to %s, client key %s", msg.Recipients(), config.Key)
 
 	return nil
 }
@@ -183,7 +170,7 @@ func (e *Email) client(key string) (*pop3.Client, error) {
 func (e *Email) loadConfig() ([]*Config, error) {
 	var configList []*Config
 
-	path := filepath.Join(config.GetWorkingDirectory(), "config.yaml")
+	path := filepath.Join(config.GetWorkingDirectory(), config.EmailConfigFile)
 
 	file, err := os.Open(path)
 	defer file.Close()

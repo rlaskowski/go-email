@@ -78,8 +78,31 @@ func (m *Message) Sender() string {
 	return m.header.Get(SenderHeader)
 }
 
+func (m *Message) SenderName() string {
+	s, err := m.parseSender()
+	if err != nil {
+		return ""
+	}
+
+	return s.Name
+}
+
+func (m *Message) SenderAddress() string {
+	s, err := m.parseSender()
+	if err != nil {
+		return ""
+	}
+
+	return s.Address
+}
+
 func (m *Message) Subject() string {
 	return m.header.Get(SubjectHeader)
+}
+
+func (m *Message) parseSender() (*mail.Address, error) {
+	s := m.Sender()
+	return mail.ParseAddress(s)
 }
 
 func (m *Message) encode(value []byte) string {
@@ -184,7 +207,7 @@ func (m *Message) mixedBody(boundary string, writer io.Writer) error {
 		return err
 	}
 
-	if cmw, err := m.putContent(alternativeBoundary, w); err == nil {
+	if cmw, err := m.writeContent(alternativeBoundary, w); err == nil {
 		if err := cmw.Close(); err != nil {
 			return err
 		}
@@ -200,7 +223,7 @@ func (m *Message) mixedBody(boundary string, writer io.Writer) error {
 }
 
 func (m *Message) alternativeBody(boundary string, writer io.Writer) error {
-	mw, err := m.putContent(boundary, writer)
+	mw, err := m.writeContent(boundary, writer)
 	if err != nil {
 		return err
 	}
@@ -208,7 +231,7 @@ func (m *Message) alternativeBody(boundary string, writer io.Writer) error {
 	return mw.Close()
 }
 
-func (m *Message) putContent(boundary string, writer io.Writer) (*multipart.Writer, error) {
+func (m *Message) writeContent(boundary string, writer io.Writer) (*multipart.Writer, error) {
 	mw := multipart.NewWriter(writer)
 
 	if err := mw.SetBoundary(boundary); err != nil {

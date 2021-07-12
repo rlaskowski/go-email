@@ -97,7 +97,7 @@ func TestPutContent(t *testing.T) {
 
 	buff := &bytes.Buffer{}
 
-	if mw, err := m.putContent(b, buff); err != nil {
+	if mw, err := m.writeContent(b, buff); err != nil {
 		t.Errorf("Could not write content message due to: %s", err)
 	} else {
 		if err := mw.Close(); err != nil {

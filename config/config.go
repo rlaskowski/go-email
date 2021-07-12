@@ -6,6 +6,7 @@ import (
 
 const (
 	ExecutableName  = "email"
+	EmailConfigFile = "config.yaml"
 	FilePermissions = 0700
 	FileCopyBuff    = 1024 * 1024
 )
