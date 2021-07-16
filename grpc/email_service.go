@@ -129,8 +129,8 @@ func (e *EmailQueue) RouteMessage(stream emailservice.EmailService_RouteMessageS
 	return nil
 }
 
-func (e *EmailQueue) emailQueue() queue.QueueProcess {
-	que, err := e.queueFactory.GetOrCreate(queue.EmailQueueType)
+func (e *EmailQueue) emailQueue(key string) queue.QueueProcess {
+	que, err := e.queueFactory.GetOrCreate(key)
 	if err != nil {
 		return nil
 	}

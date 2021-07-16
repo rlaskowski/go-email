@@ -50,10 +50,6 @@ func (s *Service) Start() error {
 		log.Printf("Could not start Email: %s", err)
 	}
 
-	if err := s.queueFactory.Start(); err != nil {
-		log.Printf("Could not start Queue factory: %s", err)
-	}
-
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt)
 
@@ -74,10 +70,6 @@ func (s *Service) Stop() error {
 
 	if err := s.email.Stop(); err != nil {
 		log.Printf("Could not stop Email: %s", err)
-	}
-
-	if err := s.queueFactory.Stop(); err != nil {
-		log.Printf("Could not stop Queue factory: %s", err)
 	}
 
 	return nil
