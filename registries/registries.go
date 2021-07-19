@@ -1,24 +1,37 @@
 package registries
 
 import (
-	"github.com/rlaskowski/go-email/email"
 	"github.com/rlaskowski/go-email/grpc"
 	"github.com/rlaskowski/go-email/queue"
 )
 
 type Registries struct {
-	QueueFactory   *queue.QueueFactory
-	Email          *email.Email
-	GrpcEmailQueue *grpc.EmailQueue
+	queueBox       *queue.QueueBox
+	GrpcEmailQueue *grpc.EmailService
 }
 
-func NewRegistries(queueFactory *queue.QueueFactory, email *email.Email) *Registries {
+func NewRegistries() *Registries {
 	r := &Registries{
-		QueueFactory: queueFactory,
-		Email:        email,
+		queueBox: new(queue.QueueBox),
 	}
 
-	r.GrpcEmailQueue = grpc.NewEmailQueue(r.QueueFactory, r.Email)
+	r.GrpcEmailQueue = grpc.NewEmailService(r.queueBox)
 
 	return r
+}
+
+func (r *Registries) Start() error {
+	if err := r.queueBox.Start(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *Registries) Stop() error {
+	if err := r.queueBox.Stop(); err != nil {
+		return err
+	}
+
+	return nil
 }
