@@ -33,17 +33,7 @@ func NewEmail() *Email {
 	}
 }
 
-func (e *Email) Start() error {
-	log.Print("Starting Email")
-	return e.configure()
-}
-
-func (e *Email) Stop() error {
-	log.Print("Stopping Email...")
-	return nil
-}
-
-func (e *Email) configure() error {
+func (e *Email) Init() error {
 	config, err := e.loadConfig()
 	if err != nil {
 		return err

@@ -8,12 +8,14 @@ import (
 )
 
 type QueueBox struct {
-	emailPool sync.Pool
+	emailPool      sync.Pool
+	receivingQueue QueueProcess
+	sendingQueue   QueueProcess
 }
 
 func (q *QueueBox) Start() error {
 	q.emailPool.New = func() interface{} {
-		return new(email.Email)
+		return email.NewEmail()
 	}
 
 	return q.start()
@@ -24,7 +26,26 @@ func (q *QueueBox) Stop() error {
 }
 
 func (q *QueueBox) start() error {
-	return errors.New("Not yet implemented")
+	if err := q.initEmail(); err != nil {
+		return err
+	}
+
+	go q.receiving()
+
+	return nil
+}
+
+func (q *QueueBox) receiving() error {
+	return errors.New("Not implemented yet")
+}
+
+func (q *QueueBox) sending() error {
+	return errors.New("Not implemented yet")
+}
+
+func (q *QueueBox) initEmail() error {
+	e := q.acquireEmail()
+	return e.Init()
 }
 
 func (q *QueueBox) acquireEmail() *email.Email {
