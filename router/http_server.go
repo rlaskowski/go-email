@@ -70,11 +70,15 @@ func (h *HttpServer) Start() error {
 }
 
 func (h *HttpServer) Stop() error {
-	h.cancel()
-
 	log.Print("Stopping REST API")
 
-	return h.server.Close()
+	if err := h.server.Close(); err != nil {
+		return err
+	}
+
+	h.cancel()
+
+	return nil
 }
 
 func (h *HttpServer) configureEndpoints() {

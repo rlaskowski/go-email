@@ -2,29 +2,60 @@ package grpc
 
 import (
 	"bytes"
-	"encoding/json"
-	"errors"
-	"io"
+	"encoding/binary"
 
-	"github.com/rlaskowski/go-email/email"
 	"github.com/rlaskowski/go-email/grpc/protobuf/emailservice"
 	"github.com/rlaskowski/go-email/queue"
 )
 
-type EmailQueue struct {
-	queueFactory *queue.QueueFactory
-	emailServ    *email.Email
+type EmailService struct {
+	queueBox *queue.QueueBox
 	emailservice.UnimplementedEmailServiceServer
 }
 
-func NewEmailQueue(queueFactory *queue.QueueFactory, emserv *email.Email) *EmailQueue {
-	return &EmailQueue{
-		queueFactory: queueFactory,
-		emailServ:    emserv,
+func NewEmailService(queueBox *queue.QueueBox) *EmailService {
+	return &EmailService{
+		queueBox: queueBox,
 	}
 }
 
-func (e *EmailQueue) MessageStat(request *emailservice.StatRequest, stream emailservice.EmailService_MessageStatServer) error {
+func (e *EmailService) ReceiveMessage(request *emailservice.IncomingMsgRequest, stream emailservice.EmailService_ReceiveMessageServer) error {
+	qb, err := e.queueBox.ReceiveMessage(request.GetKey())
+	if err != nil {
+		return err
+	}
+
+	response := &emailservice.IncomingMsgResponse{}
+
+	for _, mi := range qb {
+		incomingMesssage := &emailservice.IncomingMessage{
+			Id: mi.MessageId(),
+			Address: &emailservice.Address{
+				Name:    mi.Sender().Name,
+				Address: mi.Sender().Address,
+			},
+			Subject: mi.Subject(),
+			Date:    mi.Date(),
+		}
+
+		buff := &bytes.Buffer{}
+
+		if err := binary.Write(buff, binary.LittleEndian, incomingMesssage); err != nil {
+			return err
+		}
+
+		response.Message = buff.Bytes()
+
+		stream.Send(response)
+
+	}
+
+	return nil
+
+}
+
+/*
+func (e *EmailService) MessageStat(request *emailservice.StatRequest, stream emailservice.EmailService_MessageStatServer) error {
 	stat, err := e.emailServ.Stat(request.Key)
 	if err != nil {
 		return err
@@ -43,7 +74,7 @@ func (e *EmailQueue) MessageStat(request *emailservice.StatRequest, stream email
 	return nil
 }
 
-func (e *EmailQueue) ReceiveMessage(request *emailservice.IncomingMsgRequest, stream emailservice.EmailService_ReceiveMessageServer) error {
+func (e *EmailService) ReceiveMessage(request *emailservice.IncomingMsgRequest, stream emailservice.EmailService_ReceiveMessageServer) error {
 	m, err := e.emailServ.ReadMessage(request.Key, request.MessageNumber)
 	if err != nil {
 		return err
@@ -109,31 +140,11 @@ func (e *EmailQueue) ReceiveMessage(request *emailservice.IncomingMsgRequest, st
 	return nil
 }
 
-func (e *EmailQueue) RouteMessage(stream emailservice.EmailService_RouteMessageServer) error {
-	/* statlist := make(map[int64]*email.Stat)
-
-	for {
-		statin, err := stream.Recv()
-
-		if err != nil {
-			if err != io.EOF {
-				return err
-			}
-			return nil
-		}
-
-
-
-
-	} */
-	return nil
-}
-
-func (e *EmailQueue) emailQueue(key string) queue.QueueProcess {
+ func (e *EmailService) emailQueue(key string) queue.QueueProcess {
 	que, err := e.queueFactory.GetOrCreate(key)
 	if err != nil {
 		return nil
 	}
 
 	return que
-}
+} */

@@ -2,8 +2,6 @@ package queue
 
 import (
 	"container/heap"
-
-	"github.com/rlaskowski/go-email/email"
 )
 
 type QueueSubject string
@@ -16,7 +14,6 @@ type QueueStore struct {
 
 type PriorityQueue struct {
 	queue []*QueueStore
-	email *email.Email
 }
 
 func NewPriorityQueue() *PriorityQueue {

@@ -20,8 +20,9 @@ func New() *Service {
 	registries := registries.NewRegistries()
 
 	return &Service{
-		http: router.NewHttpServer(registries),
-		grpc: router.NewGrpcServer(registries),
+		http:       router.NewHttpServer(registries),
+		grpc:       router.NewGrpcServer(registries),
+		registries: registries,
 	}
 }
 

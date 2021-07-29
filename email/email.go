@@ -44,6 +44,11 @@ func (e *Email) Init() error {
 	return nil
 }
 
+//List of all connection config
+func (e *Email) Config() []*Config {
+	return e.config
+}
+
 //Sending email
 func (e *Email) Send(key string, msg *Message) error {
 	c, err := e.configByKey(key)
