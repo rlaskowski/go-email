@@ -2,7 +2,9 @@ package grpc
 
 import (
 	"bytes"
-	"encoding/binary"
+	"encoding/json"
+	"io"
+	"log"
 
 	"github.com/rlaskowski/go-email/grpc/protobuf/emailservice"
 	"github.com/rlaskowski/go-email/queue"
@@ -25,9 +27,14 @@ func (e *EmailService) ReceiveMessage(request *emailservice.IncomingMsgRequest, 
 		return err
 	}
 
-	response := &emailservice.IncomingMsgResponse{}
+	total := int64(len(qb))
 
-	for _, mi := range qb {
+	for i, mi := range qb {
+		response := &emailservice.IncomingMsgResponse{
+			Encoding: "json",
+			Total:    total,
+		}
+
 		incomingMesssage := &emailservice.IncomingMessage{
 			Id: mi.MessageId(),
 			Address: &emailservice.Address{
@@ -38,15 +45,64 @@ func (e *EmailService) ReceiveMessage(request *emailservice.IncomingMsgRequest, 
 			Date:    mi.Date(),
 		}
 
-		buff := &bytes.Buffer{}
+		for _, f := range mi.Files() {
+			file := &emailservice.File{Name: f.Name}
+			r := bytes.NewReader(f.Data)
+			w := bytes.NewBuffer(file.Data)
 
-		if err := binary.Write(buff, binary.LittleEndian, incomingMesssage); err != nil {
+			n, err := io.Copy(w, r)
+			if err != nil {
+				log.Printf("Couldn't copy data from email file to emailservice file due to: %s", err)
+			}
+
+			log.Printf("Written file data: %d", n)
+
+			incomingMesssage.Files = append(incomingMesssage.Files, file)
+		}
+
+		response.MessageNumber = int64(i + 1)
+
+		b, err := json.Marshal(incomingMesssage)
+		if err != nil {
 			return err
 		}
 
-		response.Message = buff.Bytes()
+		response.Message = b
 
 		stream.Send(response)
+
+		/* 	buff := bytes.Buffer{}
+		encoder := json.NewEncoder(&buff)
+
+		if err := encoder.Encode(incomingMesssage); err != nil {
+			return err
+		}
+
+
+
+
+
+
+		/* 		log.Println(buff.String())
+
+		   		mb := make([]byte, 32*1024)
+
+		   		for {
+		   			n, err := buff.Read(mb)
+
+		   			if n > 0 {
+		   				response.Message = mb[0:n]
+		   			}
+
+		   			if err != nil {
+		   				if err != io.EOF {
+		   					return err
+		   				}
+		   				break
+		   			}
+
+		   			stream.Send(response)
+		   		} */
 
 	}
 

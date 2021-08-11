@@ -1,4 +1,4 @@
-package registries
+package registry
 
 import (
 	"github.com/rlaskowski/go-email/grpc"
