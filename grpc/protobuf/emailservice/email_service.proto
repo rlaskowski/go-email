@@ -35,7 +35,7 @@ message File {
 }
 
 message StatRequest {
-    string key = 1;
+    string key = 1; 
 }
 
 message IncomingMsgRequest {
@@ -44,14 +44,15 @@ message IncomingMsgRequest {
 }
 
 message IncomingMsgResponse {
-    bytes message = 1;
+    string encoding = 1;
+    int64 total = 2;
+    int64 message_number = 3;
+    bytes message = 4;
 }
 
 
 service EmailService {
-    rpc MessageStat(StatRequest) returns (stream Stat) {}
     rpc ReceiveMessage(IncomingMsgRequest) returns (stream IncomingMsgResponse) {}
-    rpc RouteMessage(stream Stat) returns (stream IncomingMsgResponse) {}
 }
 
 

@@ -12,7 +12,7 @@ import (
 	"github.com/bmizerany/pat"
 	"github.com/rlaskowski/go-email/config"
 	"github.com/rlaskowski/go-email/controller"
-	"github.com/rlaskowski/go-email/registries"
+	"github.com/rlaskowski/go-email/registry"
 )
 
 type HttpServer struct {
@@ -20,7 +20,8 @@ type HttpServer struct {
 	router        *pat.PatternServeMux
 	context       context.Context
 	cancel        context.CancelFunc
-	registries    *registries.Registries
+	registry      registry.Registry
+	serviceConfig config.ServiceConfig
 	multipartPool sync.Pool
 }
 
@@ -30,21 +31,24 @@ type Router struct {
 	name   http.HandlerFunc
 }
 
-func NewHttpServer(registries *registries.Registries) *HttpServer {
+func NewHttpServer(registry registry.Registry) *HttpServer {
 	ctx, cancel := context.WithCancel(context.Background())
 
+	sc := registry.ServiceConfig()
+
 	h := &HttpServer{
-		context:    ctx,
-		cancel:     cancel,
-		router:     pat.New(),
-		registries: registries,
+		context:       ctx,
+		cancel:        cancel,
+		router:        pat.New(),
+		registry:      registry,
+		serviceConfig: sc,
 	}
 
 	h.server = &http.Server{
-		Addr:           fmt.Sprintf(":%d", config.HttpServerPort),
-		ReadTimeout:    config.HttpServerReadTimeout,
-		WriteTimeout:   config.HttpServerWriteTimeout,
-		MaxHeaderBytes: config.HttpMaxHeaderSize,
+		Addr:           fmt.Sprintf(":%d", h.serviceConfig.HttpServerPort),
+		ReadTimeout:    h.serviceConfig.HttpServerReadTimeout,
+		WriteTimeout:   h.serviceConfig.HttpServerWriteTimeout,
+		MaxHeaderBytes: h.serviceConfig.HttpMaxHeaderSize,
 		Handler:        h,
 	}
 
@@ -59,7 +63,7 @@ func (h *HttpServer) Start() error {
 	go func() {
 		h.configureEndpoints()
 
-		log.Printf("Starting REST API on %d port", config.HttpServerPort)
+		log.Printf("Starting REST API on %d port", h.serviceConfig.HttpServerPort)
 
 		if err := h.server.ListenAndServe(); err != nil {
 			log.Fatalf("Caught error while starting server: %s", err.Error())
@@ -70,11 +74,15 @@ func (h *HttpServer) Start() error {
 }
 
 func (h *HttpServer) Stop() error {
-	h.cancel()
-
 	log.Print("Stopping REST API")
 
-	return h.server.Close()
+	if err := h.server.Close(); err != nil {
+		return err
+	}
+
+	h.cancel()
+
+	return nil
 }
 
 func (h *HttpServer) configureEndpoints() {

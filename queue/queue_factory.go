@@ -1,74 +1,42 @@
 package queue
 
 import (
-	"log"
 	"sync"
-
-	"github.com/rlaskowski/go-email/email"
 )
-
-var (
-	EmailQueueType QueueType = "emailqueue"
-)
-
-type QueueType string
 
 type Queue struct {
 	queueProcess QueueProcess
 }
 
 type QueueFactory struct {
-	factory map[QueueType]*Queue
-	email   *email.Email
+	factory map[string]*Queue
 	mutex   *sync.Mutex
 }
 
-func NewFactory(email *email.Email) *QueueFactory {
+func NewFactory() *QueueFactory {
 	return &QueueFactory{
-		factory: make(map[QueueType]*Queue),
-		email:   email,
+		factory: make(map[string]*Queue),
 		mutex:   &sync.Mutex{},
 	}
 }
 
-func (q *QueueFactory) Start() error {
-	log.Print("Starting Queue Factory")
-	return nil
-}
-
-func (q *QueueFactory) Stop() error {
-	log.Print("Stopping Queue Factory")
-
-	for _, queue := range q.factory {
-		if err := queue.queueProcess.Stop(); err != nil {
-			log.Fatalf("Caught error while stopping queue %s", err.Error())
-		}
-	}
-
-	return nil
-}
-
-func (q *QueueFactory) GetOrCreate(key QueueType) (QueueProcess, error) {
+func (q *QueueFactory) GetOrCreate(key string) QueueProcess {
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
 
 	if queue, ok := q.factory[key]; ok {
-		return queue.queueProcess, nil
+		return queue.queueProcess
 	}
 
-	return q.createEmailQueue(key)
+	return q.createPriorityQueue(key)
 }
 
-func (q *QueueFactory) createEmailQueue(key QueueType) (*EmailQueue, error) {
-	emailq := NewEmailQueue(q.email)
-
-	if err := emailq.Start(); err != nil {
-		return nil, err
-	}
+func (q *QueueFactory) createPriorityQueue(key string) *PriorityQueue {
+	emailq := NewPriorityQueue()
 
 	q.factory[key] = &Queue{
 		queueProcess: emailq,
 	}
 
-	return emailq, nil
+	return emailq
 }
