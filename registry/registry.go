@@ -8,8 +8,6 @@ import (
 
 type Registry interface {
 	EmailService() *grpc.EmailService
-
 	QueueBox() *queue.QueueBox
-
 	ServiceConfig() config.ServiceConfig
 }

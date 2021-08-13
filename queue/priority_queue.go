@@ -2,12 +2,14 @@ package queue
 
 import (
 	"container/heap"
+	"strings"
 )
 
 type QueueSubject string
 
 type QueueStore struct {
 	Message  interface{}
+	Key      string
 	Priority int
 	Index    int
 }
@@ -27,10 +29,13 @@ func NewPriorityQueue() *PriorityQueue {
 }
 
 func (p *PriorityQueue) Push(qstore interface{}) {
-	n := len(p.queue)
 	qs := qstore.(*QueueStore)
-	qs.Index = n
-	p.queue = append(p.queue, qs)
+
+	if p.isUnique(qs) {
+		n := len(p.queue)
+		qs.Index = n
+		p.queue = append(p.queue, qs)
+	}
 }
 
 func (p *PriorityQueue) Pop() interface{} {
@@ -56,4 +61,13 @@ func (p *PriorityQueue) Swap(i, j int) {
 	p.queue[i], p.queue[j] = p.queue[j], p.queue[i]
 	p.queue[i].Index = i
 	p.queue[j].Index = j
+}
+
+func (p *PriorityQueue) isUnique(qsitem *QueueStore) bool {
+	for _, qs := range p.queue {
+		if strings.Contains(qs.Key, qsitem.Key) {
+			return false
+		}
+	}
+	return true
 }

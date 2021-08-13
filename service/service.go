@@ -12,11 +12,10 @@ import (
 )
 
 type Service struct {
-	http         *router.HttpServer
-	grpc         *router.GrpcServer
-	queueBox     *queue.QueueBox
-	emailService *grpc.EmailService
-	//registry         registry.Registry
+	http          *router.HttpServer
+	grpc          *router.GrpcServer
+	queueBox      *queue.QueueBox
+	emailService  *grpc.EmailService
 	serviceConfig config.ServiceConfig
 }
 
