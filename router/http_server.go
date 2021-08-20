@@ -23,12 +23,7 @@ type HttpServer struct {
 	registry      registry.Registry
 	serviceConfig config.ServiceConfig
 	multipartPool sync.Pool
-}
-
-type Router struct {
-	method string
-	host   string
-	name   http.HandlerFunc
+	handlePool    sync.Pool
 }
 
 func NewHttpServer(registry registry.Registry) *HttpServer {
@@ -49,11 +44,15 @@ func NewHttpServer(registry registry.Registry) *HttpServer {
 		ReadTimeout:    h.serviceConfig.HttpServerReadTimeout,
 		WriteTimeout:   h.serviceConfig.HttpServerWriteTimeout,
 		MaxHeaderBytes: h.serviceConfig.HttpMaxHeaderSize,
-		Handler:        h,
+		Handler:        h.router,
 	}
 
 	h.multipartPool.New = func() interface{} {
 		return new(controller.MutlipartController)
+	}
+
+	h.handlePool.New = func() interface{} {
+		return NewHandle(nil, nil)
 	}
 
 	return h
@@ -86,24 +85,48 @@ func (h *HttpServer) Stop() error {
 }
 
 func (h *HttpServer) configureEndpoints() {
-	h.Post("/file/send", h.SendWithFile)
-	h.Post("/send", h.Send)
+	//h.Post("/file/send", h.SendWithFile)
+	//h.Post("/send", h.Send)
 	h.Get("/receive/list", h.ReceiveList)
 }
 
-func (h *HttpServer) Get(path string, handler http.HandlerFunc) {
-	h.router.Get(path, handler)
+func (h *HttpServer) add(method, path string, fn func(handler Handler)) {
+	//handler := http.HandlerFunc(nil)
+	//h.router.Add(http.MethodGet, path, handler)
 }
 
-func (h *HttpServer) Post(path string, handler http.HandlerFunc) {
-	h.router.Post(path, handler)
+func (h *HttpServer) Get(path string, handlerFunc HandlerFunc) {
+	h.add(http.MethodGet, path, handlerFunc)
+}
+
+func (h *HttpServer) Post(path string, handlerFunc HandlerFunc) {
+	h.add(http.MethodPost, path, handlerFunc)
+}
+
+func (h *HttpServer) Put(path string, handlerFunc HandlerFunc) {
+	h.add(http.MethodPut, path, handlerFunc)
+}
+
+func (h *HttpServer) Delete(path string, handlerFunc HandlerFunc) {
+	h.add(http.MethodDelete, path, handlerFunc)
+}
+
+func (h *HttpServer) Options(path string, handlerFunc HandlerFunc) {
+	h.add(http.MethodOptions, path, handlerFunc)
+}
+
+func (h *HttpServer) Head(path string, handlerFunc HandlerFunc) {
+	h.add(http.MethodHead, path, handlerFunc)
 }
 
 func (h *HttpServer) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
+	handle := h.acquireHandle()
+	handle.Reload(rw, r)
+
 	h.router.ServeHTTP(rw, r)
 }
 
-func (h *HttpServer) ReceiveList(rw http.ResponseWriter, r *http.Request) {
+func (h *HttpServer) ReceiveList(handler Handler) {
 	/* que, err := h.registries.QueueFactory.GetOrCreate(queue.EmailQueueType)
 	if err != nil {
 		rw.WriteHeader(http.StatusBadRequest)
@@ -113,6 +136,7 @@ func (h *HttpServer) ReceiveList(rw http.ResponseWriter, r *http.Request) {
 
 	list, _ := que.Subscribe(queue.SubjectReceiving)
 	h.json(rw, list) */
+	fmt.Println("test")
 }
 
 func (h *HttpServer) SendWithFile(rw http.ResponseWriter, r *http.Request) {
@@ -235,6 +259,13 @@ func (h *HttpServer) acquireMultipart(reader *multipart.Reader) *controller.Mutl
 	m.Reader = reader
 
 	return m
+}
+
+func (h *HttpServer) acquireHandle() *Handle {
+	handle := h.handlePool.Get().(*Handle)
+	defer h.handlePool.Put(handle)
+
+	return handle
 }
 
 /* func (h *HttpServer) BME280(rw http.ResponseWriter, r *http.Request) {
