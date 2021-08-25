@@ -15,6 +15,8 @@ type HandlerFunc func(Handler)
 type Handler interface {
 	FormValue(key string) string
 
+	Param(key string) string
+
 	JSON(code int, i interface{})
 
 	Reload(rw http.ResponseWriter, r *http.Request)
@@ -39,6 +41,11 @@ func NewHandle(rw http.ResponseWriter, r *http.Request) *Handle {
 
 func (h *Handle) FormValue(key string) string {
 	return h.request.FormValue(key)
+}
+
+func (h *Handle) Param(key string) string {
+	query := h.request.URL.Query()
+	return query.Get(key)
 }
 
 func (h *Handle) Handler() HandlerFunc {

@@ -8,18 +8,16 @@ import (
 	"sync"
 
 	"github.com/rlaskowski/go-email/config"
-	"github.com/rlaskowski/go-email/controller"
 	"github.com/rlaskowski/go-email/registry"
 )
 
 type HttpServer struct {
 	server        *http.Server
-	router        *Router //*pat.PatternServeMux
+	router        *Router
 	context       context.Context
 	cancel        context.CancelFunc
 	registry      registry.Registry
 	serviceConfig config.ServiceConfig
-	multipartPool sync.Pool
 	handlePool    sync.Pool
 }
 
@@ -31,7 +29,7 @@ func NewHttpServer(registry registry.Registry) *HttpServer {
 	h := &HttpServer{
 		context:       ctx,
 		cancel:        cancel,
-		router:        NewRouter(), //pat.New(),
+		router:        NewRouter(),
 		registry:      registry,
 		serviceConfig: sc,
 	}
@@ -42,10 +40,6 @@ func NewHttpServer(registry registry.Registry) *HttpServer {
 		WriteTimeout:   h.serviceConfig.HttpServerWriteTimeout,
 		MaxHeaderBytes: h.serviceConfig.HttpMaxHeaderSize,
 		Handler:        h,
-	}
-
-	h.multipartPool.New = func() interface{} {
-		return new(controller.MutlipartController)
 	}
 
 	h.handlePool.New = func() interface{} {
@@ -85,6 +79,7 @@ func (h *HttpServer) configureEndpoints() {
 	//h.Post("/file/send", h.SendWithFile)
 	//h.Post("/send", h.Send)
 	h.Get("/receive/list", h.ReceiveList)
+	h.Get("/receive/list/:id", h.ReceiveByID)
 }
 
 func (h *HttpServer) add(method, path string, handler HandlerFunc) {
@@ -124,28 +119,29 @@ func (h *HttpServer) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	handle.Reload(rw, r)
 
 	handlerFunc := h.router.FindHandle(r.Method, r.URL.Path)
-	handlerFunc(handle)
+
+	if !(handlerFunc == nil) {
+		handlerFunc(handle)
+	}
 }
 
 func (h *HttpServer) ReceiveList(handler Handler) {
-	/* que, err := h.registries.QueueFactory.GetOrCreate(queue.EmailQueueType)
+	key := handler.FormValue("key")
+
+	es := h.registry.EmailRestService()
+
+	list, err := es.ReceiveList(key)
 	if err != nil {
-		rw.WriteHeader(http.StatusBadRequest)
-		rw.Write([]byte(err.Error()))
-		return
+		handler.JSON(http.StatusBadRequest, err)
 	}
 
-	list, _ := que.Subscribe(queue.SubjectReceiving)
-	h.json(rw, list) */
-	a := struct {
-		Name     string
-		Lastname string
-	}{
-		"Rafal",
-		"Laskowski",
-	}
+	handler.JSON(http.StatusOK, list)
+}
 
-	handler.JSON(http.StatusOK, a)
+func (h *HttpServer) ReceiveByID(handler Handler) {
+	id := handler.Param(":id")
+
+	fmt.Println(id)
 }
 
 func (h *HttpServer) SendWithFile(rw http.ResponseWriter, r *http.Request) {

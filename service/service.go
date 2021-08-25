@@ -4,19 +4,22 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"syscall"
 
 	"github.com/rlaskowski/go-email/config"
 	"github.com/rlaskowski/go-email/grpc"
 	"github.com/rlaskowski/go-email/queue"
+	"github.com/rlaskowski/go-email/rest"
 	"github.com/rlaskowski/go-email/router"
 )
 
 type Service struct {
-	http          *router.HttpServer
-	grpc          *router.GrpcServer
-	queueBox      *queue.QueueBox
-	emailService  *grpc.EmailService
-	serviceConfig config.ServiceConfig
+	http             *router.HttpServer
+	grpc             *router.GrpcServer
+	queueBox         *queue.QueueBox
+	emailService     *grpc.EmailService
+	emailRestService *rest.EmailService
+	serviceConfig    config.ServiceConfig
 }
 
 func NewService() *Service {
@@ -35,6 +38,7 @@ func newService(serviceConfig config.ServiceConfig) *Service {
 	}
 
 	s.emailService = grpc.NewEmailService(s.queueBox)
+	s.emailRestService = rest.NewEmailService(s.queueBox)
 	s.http = router.NewHttpServer(s)
 	s.grpc = router.NewGrpcServer(s)
 
@@ -57,8 +61,8 @@ func (s *Service) Start() error {
 		log.Printf("Could not start GRPC server: %s", err)
 	}
 
-	sigChan := make(chan os.Signal)
-	signal.Notify(sigChan, os.Kill, os.Interrupt)
+	sigChan := make(chan os.Signal, 2)
+	signal.Notify(sigChan, syscall.SIGTERM)
 
 	<-sigChan
 
@@ -84,6 +88,10 @@ func (s *Service) Stop() error {
 
 func (s *Service) EmailService() *grpc.EmailService {
 	return s.emailService
+}
+
+func (s *Service) EmailRestService() *rest.EmailService {
+	return s.emailRestService
 }
 
 func (s *Service) QueueBox() *queue.QueueBox {
