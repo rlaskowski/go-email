@@ -2,14 +2,11 @@ package router
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
-	"mime/multipart"
 	"net/http"
 	"sync"
 
-	"github.com/bmizerany/pat"
 	"github.com/rlaskowski/go-email/config"
 	"github.com/rlaskowski/go-email/controller"
 	"github.com/rlaskowski/go-email/registry"
@@ -17,7 +14,7 @@ import (
 
 type HttpServer struct {
 	server        *http.Server
-	router        *pat.PatternServeMux
+	router        *Router //*pat.PatternServeMux
 	context       context.Context
 	cancel        context.CancelFunc
 	registry      registry.Registry
@@ -34,7 +31,7 @@ func NewHttpServer(registry registry.Registry) *HttpServer {
 	h := &HttpServer{
 		context:       ctx,
 		cancel:        cancel,
-		router:        pat.New(),
+		router:        NewRouter(), //pat.New(),
 		registry:      registry,
 		serviceConfig: sc,
 	}
@@ -44,7 +41,7 @@ func NewHttpServer(registry registry.Registry) *HttpServer {
 		ReadTimeout:    h.serviceConfig.HttpServerReadTimeout,
 		WriteTimeout:   h.serviceConfig.HttpServerWriteTimeout,
 		MaxHeaderBytes: h.serviceConfig.HttpMaxHeaderSize,
-		Handler:        h.router,
+		Handler:        h,
 	}
 
 	h.multipartPool.New = func() interface{} {
@@ -90,7 +87,8 @@ func (h *HttpServer) configureEndpoints() {
 	h.Get("/receive/list", h.ReceiveList)
 }
 
-func (h *HttpServer) add(method, path string, fn func(handler Handler)) {
+func (h *HttpServer) add(method, path string, handler HandlerFunc) {
+	h.router.Add(method, path, handler)
 	//handler := http.HandlerFunc(nil)
 	//h.router.Add(http.MethodGet, path, handler)
 }
@@ -120,10 +118,13 @@ func (h *HttpServer) Head(path string, handlerFunc HandlerFunc) {
 }
 
 func (h *HttpServer) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
-	handle := h.acquireHandle()
+	handle := h.handlePool.Get().(*Handle)
+	defer h.handlePool.Put(handle)
+
 	handle.Reload(rw, r)
 
-	h.router.ServeHTTP(rw, r)
+	handlerFunc := h.router.FindHandle(r.Method, r.URL.Path)
+	handlerFunc(handle)
 }
 
 func (h *HttpServer) ReceiveList(handler Handler) {
@@ -136,7 +137,15 @@ func (h *HttpServer) ReceiveList(handler Handler) {
 
 	list, _ := que.Subscribe(queue.SubjectReceiving)
 	h.json(rw, list) */
-	fmt.Println("test")
+	a := struct {
+		Name     string
+		Lastname string
+	}{
+		"Rafal",
+		"Laskowski",
+	}
+
+	handler.JSON(http.StatusOK, a)
 }
 
 func (h *HttpServer) SendWithFile(rw http.ResponseWriter, r *http.Request) {
@@ -238,7 +247,7 @@ func (h *HttpServer) Send(rw http.ResponseWriter, r *http.Request) {
 	return fileuuid, nil
 } */
 
-func (h *HttpServer) multiFailure(err string) error {
+/* func (h *HttpServer) multiFailure(err string) error {
 	return fmt.Errorf("%s\r\n", err)
 }
 
@@ -259,14 +268,7 @@ func (h *HttpServer) acquireMultipart(reader *multipart.Reader) *controller.Mutl
 	m.Reader = reader
 
 	return m
-}
-
-func (h *HttpServer) acquireHandle() *Handle {
-	handle := h.handlePool.Get().(*Handle)
-	defer h.handlePool.Put(handle)
-
-	return handle
-}
+} */
 
 /* func (h *HttpServer) BME280(rw http.ResponseWriter, r *http.Request) {
 	driver, err := h.registries.RaspiDriver.BME280Driver()
