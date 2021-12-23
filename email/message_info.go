@@ -34,7 +34,7 @@ type File struct {
 }
 
 type Content struct {
-	HtmlType bool   `json:"html_type"`
+	HTMLType bool   `json:"html_type"`
 	Data     []byte `json:"data"`
 }
 
@@ -194,7 +194,7 @@ func (m *MessageInfo) putContent(part *multipart.Part) error {
 	}
 
 	if strings.Contains(mediatype, "text/html") {
-		c.HtmlType = true
+		c.HTMLType = true
 	} else {
 
 		r := bytes.NewReader(dec)

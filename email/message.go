@@ -244,7 +244,7 @@ func (m *Message) writeContent(boundary string, writer io.Writer) (*multipart.Wr
 
 		h := make(textproto.MIMEHeader)
 
-		if c.HtmlType {
+		if c.HTMLType {
 			mimetype = "text/html"
 			h.Set("Content-Transfer-Encoding", "quoted-printable")
 
